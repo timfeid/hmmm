@@ -1,0 +1,5 @@
+{
+  "name": "@gangsta/rusty",
+  "version": "0.0.1",
+  "main": "bindings.ts"
+}
