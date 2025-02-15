@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { Actionable } from "./actionable";
+import type { Actionable, InputState } from "./actionable";
 
 export class Person implements Actionable {
   public id: string;

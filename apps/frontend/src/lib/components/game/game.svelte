@@ -84,7 +84,7 @@
       carSprite.body.setSize(tileSize * 2, tileSize * 2);
       carSprite.setDepth(1);
       carSprite.setCollideWorldBounds(true);
-      const car = new Car("car1", carSprite, 100, 5);
+      const car = new Car("car1", roadLayer, carSprite, 100, 5);
       this.actionables.push(car);
 
       this.anims.create({
