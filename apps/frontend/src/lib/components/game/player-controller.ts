@@ -27,8 +27,8 @@ export class PlayerController {
         );
         if (dist <= threshold) {
           // Switch control if necessary.
-          this.setControlledEntity(obj);
-          obj.action();
+          // this.setControlledEntity(obj);
+          obj.action(this);
           break;
         }
       }

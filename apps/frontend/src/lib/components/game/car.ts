@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { Actionable, InputState } from "./actionable.js";
+import type { PlayerController } from "./player-controller.js";
 
 export class Car implements Actionable {
   public id: string;
@@ -8,26 +9,60 @@ export class Car implements Actionable {
   public rotationSpeed: number;
   private targetState?: InputState;
   private isBumping: boolean = false; // flag to prevent continuous bumps
+  private readonly roadLayer: Phaser.Tilemaps.TilemapLayer;
+  carLight: Phaser.GameObjects.Light;
 
   constructor(
     id: string,
-    private readonly roadLayer: Phaser.Tilemaps.TilemapLayer,
+    private readonly scene: Phaser.Scene & {
+      roadLayer: Phaser.Tilemaps.TilemapLayer;
+      carGroup: Phaser.Physics.Arcade.Group;
+    },
     sprite: Phaser.Physics.Arcade.Sprite,
     speed = 100,
     rotationSpeed = 3
   ) {
+    scene.carGroup.add(sprite);
+
+    this.roadLayer = scene.roadLayer;
     this.id = id;
     this.sprite = sprite;
     this.speed = speed;
     this.rotationSpeed = rotationSpeed;
+
+    // Create the car sprite normally.
+    // this.sprite = this.scene.physics.add.sprite(
+    //   tileSize * 20,
+    //   tileSize * 21,
+    //   "car-north"
+    // );
+    // Create a light that follows the car.
+    this.carLight = this.scene.lights.addLight(
+      this.sprite.x,
+      this.sprite.y,
+      100,
+      0xffffff,
+      1
+    );
+    // this.carLight.setScrollFactor(0); // so it moves with the camera
+
+    // In update(), update the light's position:
+    // this.sprite.on("changedata", () => {
+    //   this.carLight.x = this.sprite.x;
+    //   this.carLight.y = this.sprite.y;
+    //   console.log("hi");
+    // });
+    // Alternatively, in update():
   }
 
   isActionable(userId: string): boolean {
     return true;
   }
 
-  action(): void {
-    // You could define an action here (e.g., entering/exiting the car)
+  action(playerController: PlayerController) {
+    playerController.getSprite().removeFromDisplayList();
+    this.sprite.addToDisplayList();
+    playerController.setControlledEntity(this);
   }
 
   getSprite(): Phaser.Physics.Arcade.Sprite {
@@ -118,6 +153,8 @@ export class Car implements Actionable {
         });
       }
     }
+    this.carLight.x = this.sprite.x;
+    this.carLight.y = this.sprite.y;
   }
 
   getInputState(): InputState {

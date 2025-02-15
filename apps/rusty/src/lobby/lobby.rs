@@ -40,8 +40,8 @@ impl GameState {
         hash.insert(
             "tim".to_string(),
             VisibleUser {
-                x: 380,
-                y: 336,
+                x: 455,
+                y: 789,
                 desired_x: None,
                 desired_y: None,
                 rotation: 1.57,
@@ -51,8 +51,8 @@ impl GameState {
         hash.insert(
             "bob".to_string(),
             VisibleUser {
-                x: 320,
-                y: 336,
+                x: 527,
+                y: 789,
                 desired_x: None,
                 desired_y: None,
                 rotation: 180.57,

@@ -1,3 +1,5 @@
+import type { PlayerController } from "./player-controller";
+
 export type InputState = {
   up: boolean;
   down: boolean;
@@ -11,7 +13,7 @@ export type InputState = {
 export interface Actionable {
   sprite: Phaser.GameObjects.Sprite;
   isActionable(userId: string): boolean;
-  action(): void;
+  action(playerController: PlayerController): void;
   updateInput(
     cursors: Phaser.Types.Input.Keyboard.CursorKeys,
     delta: number

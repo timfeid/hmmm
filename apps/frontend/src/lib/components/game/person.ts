@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import type { Actionable, InputState } from "./actionable";
+import type { PlayerController } from "./player-controller";
 
 export class Person implements Actionable {
   public id: string;
@@ -20,8 +21,10 @@ export class Person implements Actionable {
     return uid === this.id;
   }
 
-  action() {
-    console.log("go back to the person pls");
+  action(playerController: PlayerController) {
+    playerController.getSprite().removeFromDisplayList();
+    this.sprite.addToDisplayList();
+    playerController.setControlledEntity(this);
   }
 
   updateInput(cursors: Phaser.Types.Input.Keyboard.CursorKeys, delta: number) {
