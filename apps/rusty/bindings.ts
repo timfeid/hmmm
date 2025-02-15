@@ -7,6 +7,7 @@ export type Procedures = {
         { key: "authentication.login", input: LoginArgs, result: AuthResponse } | 
         { key: "authentication.refresh_token", input: string, result: AuthResponse } | 
         { key: "lobby.create", input: string[], result: LobbyData } | 
+        { key: "lobby.input", input: LobbyInputArgs, result: null } | 
         { key: "lobby.join", input: string, result: null } | 
         { key: "lobby.ready", input: string, result: null },
     subscriptions: 
@@ -19,8 +20,16 @@ export type LoginArgs = { username: string; password: string }
 
 export type LobbyTurnMessage = { messages: string[] }
 
+export type LobbyInputArgs = { access_token: string; lobby_id: string; up: boolean; down: boolean; left: boolean; right: boolean; rotation: number; x: number; y: number }
+
 export type LobbyChat = { user_id: string; message: string }
 
-export type LobbyData = { join_code: string; chat: LobbyChat[] }
+export type VisibleUser = { desired_x: number | null; desired_y: number | null; x: number; y: number; rotation: number; velocity: Velocity }
+
+export type GameState = { visible_users: { [key: string]: VisibleUser } }
+
+export type LobbyData = { join_code: string; chat: LobbyChat[]; game_state: GameState }
 
 export type LobbyCommand = { Updated: LobbyData } | { Messages: string[] } | { DebugMessage: string } | { TurnMessages: LobbyTurnMessage }
+
+export type Velocity = { x: number; y: number }

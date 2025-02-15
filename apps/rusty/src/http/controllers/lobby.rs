@@ -1,4 +1,8 @@
-use std::sync::Arc;
+use std::{
+    sync::Arc,
+    thread::{sleep, Thread},
+    time::Duration,
+};
 
 use async_stream::stream;
 use futures::Stream;
@@ -29,6 +33,19 @@ fn personalize_lobby_data_for_player(command: &mut LobbyCommand, user_id: &str) 
 
 pub struct LobbyController {}
 
+#[derive(Type, Deserialize, Debug)]
+pub struct LobbyInputArgs {
+    access_token: String,
+    lobby_id: String,
+    pub up: bool,
+    pub down: bool,
+    pub left: bool,
+    pub right: bool,
+    pub rotation: f32,
+    pub x: i32,
+    pub y: i32,
+}
+
 impl LobbyController {
     pub async fn ready(ctx: Ctx, code: String) -> AppResult<()> {
         let user = ctx.required_user()?;
@@ -56,6 +73,14 @@ impl LobbyController {
             .await
             .map_err(|x| AppError::BadRequest("No such lobby".to_string()))?;
         let data = lobby.lock().await.data.clone();
+        let mng = Arc::clone(&ctx.lobby_manager);
+        let join_code_cloned = code.clone();
+        tokio::spawn(async move {
+            loop {
+                mng.notify_lobby(&join_code_cloned).await.ok();
+                sleep(Duration::from_millis(150));
+            }
+        });
 
         Ok(data)
     }
@@ -66,29 +91,30 @@ impl LobbyController {
             .join_lobby(&join_code, user)
             .await
             .ok_or(AppError::BadRequest("Bad lobby id".to_string()))?;
-        ctx.lobby_manager.notify_lobby(&join_code).await.ok();
 
         Ok(())
     }
 
-    // pub(crate) async fn chat(ctx: Ctx, args: LobbyChatArgs) -> AppResult<()> {
-    //     let user = ctx.required_user()?;
-    //     let lobby = ctx
-    //         .lobby_manager
-    //         .get_lobby(&args.lobby_id)
-    //         .await
-    //         .map_err(|x| AppError::BadRequest("Bad lobby id".to_string()))?;
-    //     // let data = &lobby.lock().await.data;
+    pub(crate) async fn input(ctx: Ctx, args: LobbyInputArgs) -> AppResult<()> {
+        // let user = ctx.required_user()?;
+        let user_claims = JwtService::decode(&args.access_token).unwrap().claims;
+        let lobby = ctx
+            .lobby_manager
+            .get_lobby(&args.lobby_id)
+            .await
+            .map_err(|x| AppError::BadRequest("Bad lobby id".to_string()))?;
+        // let data = &lobby.lock().await.data;
 
-    //     // println!("adding message to lobby {} {:?}", data.join_code, lobby);
+        // println!("adding message to lobby {} {:?}", data.join_code, lobby);
 
-    //     lobby.lock().await.message(user, args.text);
-    //     println!("added, notifying lobby");
-    //     // lobby.lock().await.message(user, args.text);
-    //     ctx.lobby_manager.notify_lobby(&args.lobby_id).await.ok();
+        // println!("{:?}", args);
+        lobby.lock().await.input(args, user_claims.sub).await;
+        // println!("added, notifying lobby");
+        // lobby.lock().await.message(user, args.text);
+        // ctx.lobby_manager.notify_lobby(&args.lobby_id).await.ok();
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     pub(crate) fn subscribe(
         ctx: Ctx,

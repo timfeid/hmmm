@@ -12,22 +12,75 @@ impl LobbyChat {
         Self { user_id, message }
     }
 }
+
+#[derive(Type, Deserialize, Serialize, Debug, Clone)]
+pub struct Velocity {
+    x: i32,
+    y: i32,
+}
+
+#[derive(Type, Deserialize, Serialize, Debug, Clone)]
+
+pub struct VisibleUser {
+    desired_x: Option<i32>,
+    desired_y: Option<i32>,
+    x: i32,
+    y: i32,
+    rotation: f32,
+    velocity: Velocity,
+}
+
+#[derive(Type, Deserialize, Serialize, Debug, Clone)]
+pub struct GameState {
+    visible_users: HashMap<String, VisibleUser>,
+}
+impl GameState {
+    fn default() -> GameState {
+        let mut hash = HashMap::new();
+        hash.insert(
+            "tim".to_string(),
+            VisibleUser {
+                x: 380,
+                y: 336,
+                desired_x: None,
+                desired_y: None,
+                rotation: 1.57,
+                velocity: Velocity { x: 50, y: 0 },
+            },
+        );
+        hash.insert(
+            "bob".to_string(),
+            VisibleUser {
+                x: 320,
+                y: 336,
+                desired_x: None,
+                desired_y: None,
+                rotation: 180.57,
+                velocity: Velocity { x: -50, y: 0 },
+            },
+        );
+        GameState {
+            visible_users: hash,
+        }
+    }
+}
+
 #[derive(Type, Deserialize, Serialize, Debug, Clone)]
 pub struct LobbyData {
     pub join_code: String,
     pub chat: Vec<LobbyChat>,
-    // pub game_state: GameState,
+    pub game_state: GameState,
 }
 impl Default for LobbyData {
     fn default() -> LobbyData {
-        // let mut game_state = GameState::default();
+        let mut game_state = GameState::default();
         let code = ulid::Ulid::new().to_string();
         // game_state.code = code.clone();
 
         LobbyData {
             join_code: code,
             chat: vec![],
-            // game_state: game_state,
+            game_state: game_state,
         }
     }
 }
@@ -138,6 +191,7 @@ pub enum DeckSelector {
 
 use crate::{
     error::{AppError, AppResult},
+    http::controllers::lobby::LobbyInputArgs,
     services::jwt::Claims,
 };
 
@@ -157,6 +211,26 @@ impl Lobby {
 
     pub async fn join(&mut self, user: &Claims) -> &mut Self {
         println!("JOIN {:?}", self);
+
+        self
+    }
+
+    pub async fn input(&mut self, args: LobbyInputArgs, user_id: String) -> &mut Self {
+        if let Some(player) = self.data.game_state.visible_users.get_mut(&user_id) {
+            player.rotation = args.rotation;
+            player.x = args.x;
+            player.y = args.y;
+            // player.velocity = args
+            // for user in &self.data.game_state.visible_users.iter() {
+
+            // }
+            // self.data.game_state.visible_users = PlayerStatus::Ready;
+            // let mut p = player.player.lock().await;
+            // let mut deck = Deck::new_from_selection(&player.deck);
+            // deck.set_owner(&player.player).await;
+
+            // p.deck = deck;
+        }
 
         self
     }

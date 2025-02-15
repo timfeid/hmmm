@@ -1,0 +1,14 @@
+{ "columns":3,
+ "image":"person\/idle.png",
+ "imageheight":240,
+ "imagewidth":320,
+ "margin":32,
+ "name":"idle",
+ "spacing":64,
+ "tilecount":12,
+ "tiledversion":"1.11.2",
+ "tileheight":16,
+ "tilewidth":16,
+ "type":"tileset",
+ "version":"1.10"
+}
