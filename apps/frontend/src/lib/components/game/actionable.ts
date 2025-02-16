@@ -1,16 +1,14 @@
 import type { PlayerController } from "./player-controller";
 
 export type InputState = {
-  up: boolean;
-  down: boolean;
-  left: boolean;
-  right: boolean;
   rotation: number;
   x: number;
   y: number;
+  hidden: boolean;
 };
 
 export interface Actionable {
+  id: string;
   sprite: Phaser.GameObjects.Sprite;
   isActionable(userId: string): boolean;
   action(playerController: PlayerController): void;

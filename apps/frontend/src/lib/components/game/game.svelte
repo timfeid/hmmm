@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { LobbyCommand, LobbyData } from "@gangsta/rusty";
+  import type { LobbyCommand, LobbyData, VisibleObject } from "@gangsta/rusty";
   import Phaser from "phaser";
   import { onMount } from "svelte";
   import { client, websocketClient } from "../../client";
@@ -8,17 +8,24 @@
   import { PlayerController } from "./player-controller";
   import { Person } from "./person.js";
   import { Car } from "./car.js";
+  import { debounce, throttle } from "../../utils";
+  import { toast } from "svelte-sonner";
+  import type { ServerUpdatable } from "./updatable";
+  import type { Controllable } from "./controllable";
+
+  const userId = $derived(user.user?.sub || "");
 
   class Example extends Phaser.Scene {
     roadLayer!: Phaser.Tilemaps.TilemapLayer;
     private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
-    private cars: Map<String, Car> = new Map();
-    private carGroup!: Phaser.Physics.Arcade.Group;
+    private objects: Map<String, ServerUpdatable> = new Map();
+    carGroup!: Phaser.Physics.Arcade.Group;
 
-    private controller!: PlayerController;
+    private controller?: PlayerController;
     private action!: Phaser.Input.Keyboard.Key;
     private actionables: Array<any> = [];
     private tileSize: number = 16;
+    personGroup!: Phaser.Physics.Arcade.Group;
 
     preload() {
       this.load.tilemapTiledJSON("map", "/assets/map.json");
@@ -73,13 +80,23 @@
 
     create() {
       this.carGroup = this.physics.add.group();
-      this.lights.enable().setAmbientColor(0xffffff); // dark ambient light
+      this.personGroup = this.physics.add.group();
+      this.lights.enable().setAmbientColor(0xcccccc); // dark ambient light
+      this.physics.add.collider(
+        this.carGroup,
+        this.personGroup,
+        (spriteA, spriteB) => {
+          // This callback is called when two car sprites collide.
+          // console.log("Car/person collision between:", spriteA, spriteB);
+          // You can add additional collision logic here.
+        }
+      );
       this.physics.add.collider(
         this.carGroup,
         this.carGroup,
         (spriteA, spriteB) => {
           // This callback is called when two car sprites collide.
-          console.log("Car collision between:", spriteA, spriteB);
+          console.log("Car/car collision between:", spriteA, spriteB);
           // You can add additional collision logic here.
         }
       );
@@ -136,7 +153,7 @@
       // Set world and camera bounds to match the region where actual ground tiles exist.
       this.physics.world.setBounds(minX, minY, maxX - minX, maxY - minY);
       this.cameras.main.setBounds(minX, minY, maxX - minX, maxY - minY);
-      this.setNighttime(maxX, maxY);
+      // this.setNighttime(maxX, maxY);
 
       // Create WASD keys.
       this.cursors = this.input.keyboard.addKeys({
@@ -149,16 +166,6 @@
       this.action = this.input.keyboard.addKey(
         Phaser.Input.Keyboard.KeyCodes.E
       );
-
-      // Create a car entity.
-      const carSprite = this.physics.add.sprite(490, 677, "car-north");
-      carSprite.setDisplaySize(this.tileSize * 2, this.tileSize * 2);
-      carSprite.body.setSize(this.tileSize * 2, this.tileSize * 2);
-      carSprite.setDepth(1);
-      carSprite.setCollideWorldBounds(true);
-      const car = new Car(user.user!.sub, this, carSprite, 220, 5);
-      this.actionables.push(car);
-      this.cars.set(user.user!.sub, car);
 
       this.anims.create({
         key: "walk",
@@ -180,6 +187,12 @@
       });
       // Create a person entity.
 
+      // Start with the person as the controlled entity.
+
+      // Subscribe to server state updates as needed.
+    }
+
+    createPerson(object: VisibleObject) {
       const personSprite = this.physics.add.sprite(485, 752, "person-idle", 0);
       personSprite.anims.play("idle");
 
@@ -187,32 +200,64 @@
       personSprite.body.setSize(this.tileSize, this.tileSize);
       personSprite.setDepth(1);
       personSprite.setCollideWorldBounds(true);
-      const person = new Person(user.user!.sub, personSprite);
+      const person = new Person(object, this, personSprite);
+      this.personGroup.add(personSprite);
       this.actionables.push(person);
 
-      // Start with the person as the controlled entity.
-      this.controller = new PlayerController(user.user!.sub, person);
+      if (object.owner_id === userId) {
+        this.controller = new PlayerController(user.user!.sub, person);
+        this.controller.addEventListener(
+          "updated",
+          (e: CustomEvent<{ entity: Controllable }>) => {
+            console.log("hi..?", e);
+            this.updateServer(e.detail.entity, false);
+          }
+        );
+      }
 
-      // Subscribe to server state updates as needed.
+      return person;
     }
 
-    updateCars() {
-      for (const [userId, u] of Object.entries(
-        lobby?.game_state.visible_users || {}
+    createCar(object: VisibleObject) {
+      const carSprite = this.physics.add.sprite(490, 677, "car-north");
+      carSprite.setDisplaySize(this.tileSize * 2, this.tileSize * 2);
+      carSprite.body.setSize(this.tileSize * 2, this.tileSize * 2);
+      carSprite.setDepth(1);
+      carSprite.setCollideWorldBounds(true);
+      const car = new Car(object, this, carSprite, 220, 5);
+      this.actionables.push(car);
+
+      return car;
+    }
+
+    createObject(object: VisibleObject) {
+      if (object.type === "Car") {
+        return this.createCar(object);
+      }
+      if (object.type === "Person") {
+        return this.createPerson(object);
+      }
+
+      throw new Error("Unknown object" + object.type);
+    }
+
+    updateObjects(time: number, delta: number) {
+      for (const [objectId, object] of Object.entries(
+        lobby?.game_state.visible_objects || {}
       )) {
-        if (!this.cars.has(userId)) {
-          const carSprite = this.physics.add.sprite(490, 677, "car-north");
-          carSprite.setDisplaySize(this.tileSize * 2, this.tileSize * 2);
-          carSprite.body.setSize(this.tileSize * 2, this.tileSize * 2);
-          carSprite.setDepth(1);
-          carSprite.setCollideWorldBounds(true);
-          const car = new Car(userId, this, carSprite, 220, 5);
-          this.cars.set(userId, car);
+        if (!this.objects.has(objectId)) {
+          try {
+            const updateable = this.createObject(object);
+            this.objects.set(objectId, updateable);
+          } catch (e) {
+            toast.error((e as Error).message);
+          }
         }
 
-        if (userId != user.user!.sub) {
-          this.cars.get(userId)!.getSprite().setPosition(u.x, u.y);
-          this.cars.get(userId)!.getSprite().setRotation(u.rotation);
+        if (object.owner_id !== user.user!.sub) {
+          this.objects
+            .get(objectId)!
+            .updateInputFromServer(object, time, delta);
         }
         // this.cars.get(userId)!.updateInput({
         //   u
@@ -220,40 +265,51 @@
       }
     }
 
-    update(time: number, delta: number) {
-      // Let the current controlled entity update its movement based on input.
-      console.log(this.lights.getLights(this.cameras.main));
-      this.controller.update(this.cursors, delta);
-      this.updateCars();
+    async performUpdate(inputState: any) {
+      // console.log("updateserver called", inputState);
+      await websocketClient.mutation(["lobby.input", inputState]);
+    }
 
-      // Example: Press E to toggle between person and car.
+    throttledUpdate = throttle((input: any) => {
+      this.performUpdate(input);
+    });
 
-      if (Phaser.Input.Keyboard.JustDown(this.action)) {
-        this.controller.action(this.actionables);
-        // If currently controlling person, and near the car, switch control.
-        // Otherwise, if controlling the car, switch back to person.
-        // (Distance check and transfer logic goes here)
-      }
-
-      // Broadcast input state:
-      const inputState = {
+    getInputState(entity: Controllable) {
+      return {
         lobby_id: gameId,
         access_token: user.accessToken!,
-        ...this.controller.getInputState(),
+        object_id: entity.id,
+        ...entity.getInputState(),
       };
-      // websocketClient.mutation(["lobby.input", inputState]);
-      const pos = this.controller.getSprite().body?.position;
-      // if (pos) {
-      //   console.log(pos);
-      // }
-      // this.cameras.main.setBounds(0, 0, 1600, 1200);
-      this.cameras.main.startFollow(
-        this.controller.getSprite(),
-        true,
-        0.08,
-        0.08
-      );
-      this.cameras.main.setDeadzone(100, 100);
+    }
+
+    updateServer(entity: Controllable, throttle = true) {
+      if (!this.controller) {
+        return;
+      }
+
+      const inputState = this.getInputState(entity);
+      if (throttle) {
+        this.throttledUpdate(inputState, 150);
+      } else {
+        this.performUpdate(inputState);
+      }
+      // console.log("bob?");
+    }
+
+    update(time: number, delta: number) {
+      this.updateObjects(time, delta);
+
+      if (!this.controller) {
+        console.log("oh no controller");
+        return;
+      }
+
+      this.controller.update(this.cursors, delta);
+      if (Phaser.Input.Keyboard.JustDown(this.action)) {
+        this.controller.action(this.actionables);
+      }
+      this.updateServer(this.controller.getControlledEntity());
     }
   }
 
@@ -279,7 +335,7 @@
   onMount(() => {
     let unsubscribe: (() => void) | undefined;
     if (user.accessToken) {
-      console.log(["lobby.subscribe", [gameId, user.accessToken]]);
+      // console.log(["lobby.subscribe", [gameId, user.accessToken]]);
       unsubscribe = websocketClient.addSubscription(
         ["lobby.subscribe", [gameId, user.accessToken]],
         {

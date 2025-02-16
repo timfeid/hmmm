@@ -37,13 +37,15 @@ pub struct LobbyController {}
 pub struct LobbyInputArgs {
     access_token: String,
     lobby_id: String,
-    pub up: bool,
-    pub down: bool,
-    pub left: bool,
-    pub right: bool,
+    pub object_id: String,
+    // pub up: bool,
+    // pub down: bool,
+    // pub left: bool,
+    // pub right: bool,
     pub rotation: f32,
     pub x: i32,
     pub y: i32,
+    pub hidden: bool,
 }
 
 impl LobbyController {
@@ -78,7 +80,7 @@ impl LobbyController {
         tokio::spawn(async move {
             loop {
                 mng.notify_lobby(&join_code_cloned).await.ok();
-                sleep(Duration::from_millis(150));
+                sleep(Duration::from_millis(8));
             }
         });
 

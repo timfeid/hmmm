@@ -1,15 +1,57 @@
 import Phaser from "phaser";
 import type { Actionable, InputState } from "./actionable";
 import type { PlayerController } from "./player-controller";
+import type { Controllable } from "./controllable";
+import type { VisibleObject } from "@gangsta/rusty";
+import type { ServerUpdatable } from "./updatable";
 
-export class Person implements Actionable {
-  public id: string;
+export class Person implements Controllable, ServerUpdatable {
+  id: string;
   public sprite: Phaser.Physics.Arcade.Sprite;
   public speed: number = 80;
+  public rotationSpeed = 100;
+  private lastServerUpdateTime: number = 0;
+  public inControl = true;
+  private expectedUpdateInterval: number = 64;
 
-  constructor(id: string, sprite: Phaser.Physics.Arcade.Sprite) {
-    this.id = id;
+  constructor(
+    public state: VisibleObject,
+    private readonly scene: Phaser.Scene,
+    sprite: Phaser.Physics.Arcade.Sprite
+  ) {
+    this.id = state.id;
     this.sprite = sprite;
+  }
+
+  updateInputFromServer(state: VisibleObject, time: number, delta: number) {
+    this.state = state;
+    this.update(time, delta);
+    this.lastServerUpdateTime = time;
+  }
+
+  update(time: number, delta: number) {
+    if (!this.state) {
+      console.log("no state yet");
+      return;
+    }
+    const elapsed = time - this.lastServerUpdateTime;
+    const currentX = this.sprite.x;
+    const currentY = this.sprite.y;
+    const currentRotation = this.sprite.rotation;
+    const targetX = this.state.x;
+    const targetY = this.state.y;
+    const targetRotation = this.state.rotation;
+
+    const lerpFactor = Math.min(1, elapsed / this.expectedUpdateInterval);
+
+    this.sprite.x = Phaser.Math.Linear(currentX, targetX, lerpFactor);
+    this.sprite.y = Phaser.Math.Linear(currentY, targetY, lerpFactor);
+    this.sprite.rotation = Phaser.Math.Angle.RotateTo(
+      currentRotation,
+      targetRotation,
+      this.rotationSpeed * (delta / 1000)
+    );
+    this.sprite.setVisible(!this.state.hidden);
   }
 
   getSprite(): Phaser.Physics.Arcade.Sprite {
@@ -17,17 +59,30 @@ export class Person implements Actionable {
   }
 
   isActionable(uid: string) {
-    console.log(uid, this.id);
-    return uid === this.id;
+    console.log("no reason to action on someone else yet?");
+    return false;
+    // return uid === this.state.owner_id && !this.inControl;
   }
 
   action(playerController: PlayerController) {
-    playerController.getSprite().removeFromDisplayList();
-    this.sprite.addToDisplayList();
-    playerController.setControlledEntity(this);
+    console.log("actioned on the person");
+    // playerController.setControlledEntity(this);
+  }
+
+  takeControl() {
+    this.sprite.setVisible(true);
+    this.inControl = true;
+  }
+
+  removeControl() {
+    this.sprite.setVisible(false);
+
+    this.inControl = false;
   }
 
   updateInput(cursors: Phaser.Types.Input.Keyboard.CursorKeys, delta: number) {
+    this.scene.cameras.main.startFollow(this.getSprite(), true, 0.08, 0.08);
+    this.scene.cameras.main.setDeadzone(100, 100);
     const dt = delta / 1000;
     let vx = 0,
       vy = 0;
@@ -55,13 +110,10 @@ export class Person implements Actionable {
 
   getInputState(): InputState {
     return {
-      up: false,
-      down: false,
-      left: false,
-      right: false,
       rotation: Math.round(this.sprite.rotation * 1000) / 1000,
       x: Math.round(this.sprite.x),
       y: Math.round(this.sprite.y),
+      hidden: !this.sprite.visible,
     };
   }
 }

@@ -1,19 +1,23 @@
 import Phaser from "phaser";
 import type { Actionable, InputState } from "./actionable.js";
 import type { PlayerController } from "./player-controller.js";
+import type { Controllable } from "./controllable.js";
+import type { VisibleObject } from "@gangsta/rusty";
+import type { ServerUpdatable } from "./updatable.js";
 
-export class Car implements Actionable {
-  public id: string;
+export class Car implements Controllable, ServerUpdatable {
+  id: string;
   public sprite: Phaser.Physics.Arcade.Sprite;
   public speed: number;
   public rotationSpeed: number;
   private targetState?: InputState;
   private isBumping: boolean = false; // flag to prevent continuous bumps
   private readonly roadLayer: Phaser.Tilemaps.TilemapLayer;
-  carLight: Phaser.GameObjects.Light;
+  lastServerUpdateTime: number = 0;
+  private expectedUpdateInterval: number = 64;
 
   constructor(
-    id: string,
+    public state: VisibleObject,
     private readonly scene: Phaser.Scene & {
       roadLayer: Phaser.Tilemaps.TilemapLayer;
       carGroup: Phaser.Physics.Arcade.Group;
@@ -23,36 +27,11 @@ export class Car implements Actionable {
     rotationSpeed = 3
   ) {
     scene.carGroup.add(sprite);
-
+    this.id = state.id;
     this.roadLayer = scene.roadLayer;
-    this.id = id;
     this.sprite = sprite;
     this.speed = speed;
     this.rotationSpeed = rotationSpeed;
-
-    // Create the car sprite normally.
-    // this.sprite = this.scene.physics.add.sprite(
-    //   tileSize * 20,
-    //   tileSize * 21,
-    //   "car-north"
-    // );
-    // Create a light that follows the car.
-    this.carLight = this.scene.lights.addLight(
-      this.sprite.x,
-      this.sprite.y,
-      100,
-      0xffffff,
-      1
-    );
-    // this.carLight.setScrollFactor(0); // so it moves with the camera
-
-    // In update(), update the light's position:
-    // this.sprite.on("changedata", () => {
-    //   this.carLight.x = this.sprite.x;
-    //   this.carLight.y = this.sprite.y;
-    //   console.log("hi");
-    // });
-    // Alternatively, in update():
   }
 
   isActionable(userId: string): boolean {
@@ -60,9 +39,27 @@ export class Car implements Actionable {
   }
 
   action(playerController: PlayerController) {
-    playerController.getSprite().removeFromDisplayList();
-    this.sprite.addToDisplayList();
-    playerController.setControlledEntity(this);
+    // playerController.removeControl();
+    // this.sprite.addToDisplayList();
+    if (playerController.getControlledEntity() != this) {
+      playerController.setControlledEntity(this);
+      return;
+    }
+
+    if (
+      this.sprite.body?.velocity.x === 0 &&
+      this.sprite.body.velocity.y === 0
+    ) {
+      playerController.resetToMain();
+    }
+  }
+
+  takeControl() {
+    console.log("we are here taking control");
+  }
+
+  removeControl() {
+    console.log("we are here removing control");
   }
 
   getSprite(): Phaser.Physics.Arcade.Sprite {
@@ -82,6 +79,9 @@ export class Car implements Actionable {
     cursors: Phaser.Types.Input.Keyboard.CursorKeys,
     delta: number
   ): void {
+    this.scene.cameras.main.startFollow(this.getSprite(), true, 0.08, 0.08);
+    this.scene.cameras.main.setDeadzone(100, 100);
+
     const dt = delta / 1000;
     let desiredVX = 0;
     let desiredVY = 0;
@@ -108,11 +108,8 @@ export class Car implements Actionable {
       this.sprite.setTexture("car-south");
     }
 
-    // Calculate the new potential position.
     const newX = this.sprite.x + desiredVX * dt;
     const newY = this.sprite.y + desiredVY * dt;
-
-    // Check the tile at the new position.
     const tile = this.roadLayer.getTileAtWorldXY(newX, newY);
 
     if (tile) {
@@ -153,19 +150,44 @@ export class Car implements Actionable {
         });
       }
     }
-    this.carLight.x = this.sprite.x;
-    this.carLight.y = this.sprite.y;
+  }
+
+  updateInputFromServer(state: VisibleObject, time: number, delta: number) {
+    this.state = state;
+    this.update(time, delta);
+    this.lastServerUpdateTime = time;
+  }
+
+  update(time: number, delta: number) {
+    if (!this.state) {
+      console.log("no state yet");
+      return;
+    }
+    const elapsed = time - this.lastServerUpdateTime;
+    const currentX = this.sprite.x;
+    const currentY = this.sprite.y;
+    const currentRotation = this.sprite.rotation;
+    const targetX = this.state.x;
+    const targetY = this.state.y;
+    const targetRotation = this.state.rotation;
+
+    const lerpFactor = Math.min(1, elapsed / this.expectedUpdateInterval);
+
+    this.sprite.x = Phaser.Math.Linear(currentX, targetX, lerpFactor);
+    this.sprite.y = Phaser.Math.Linear(currentY, targetY, lerpFactor);
+    this.sprite.rotation = Phaser.Math.Angle.RotateTo(
+      currentRotation,
+      targetRotation,
+      this.rotationSpeed * (delta / 1000)
+    );
   }
 
   getInputState(): InputState {
     return {
-      up: false, // You could add more logic here if desired.
-      down: false,
-      left: false,
-      right: false,
       rotation: Math.round(this.sprite.rotation * 1000) / 1000,
       x: Math.round(this.sprite.x),
       y: Math.round(this.sprite.y),
+      hidden: !this.sprite.visible,
     };
   }
 }

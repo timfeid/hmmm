@@ -14,19 +14,21 @@ export type Procedures = {
         { key: "lobby.subscribe", input: [string, string], result: LobbyCommand }
 };
 
+export type GameState = { visible_objects: { [key: string]: VisibleObject } }
+
+export type VisibleObject = { id: string; x: number; y: number; rotation: number; velocity: Velocity; owner_id: string; type: VisibleObjectType; hidden: boolean }
+
 export type AuthResponse = { access_token: string | null; refresh_token: string | null; success: boolean }
 
 export type LoginArgs = { username: string; password: string }
 
 export type LobbyTurnMessage = { messages: string[] }
 
-export type LobbyInputArgs = { access_token: string; lobby_id: string; up: boolean; down: boolean; left: boolean; right: boolean; rotation: number; x: number; y: number }
+export type VisibleObjectType = "Person" | "Car"
+
+export type LobbyInputArgs = { access_token: string; lobby_id: string; object_id: string; rotation: number; x: number; y: number; hidden: boolean }
 
 export type LobbyChat = { user_id: string; message: string }
-
-export type VisibleUser = { desired_x: number | null; desired_y: number | null; x: number; y: number; rotation: number; velocity: Velocity }
-
-export type GameState = { visible_users: { [key: string]: VisibleUser } }
 
 export type LobbyData = { join_code: string; chat: LobbyChat[]; game_state: GameState }
 

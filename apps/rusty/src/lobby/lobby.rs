@@ -21,46 +21,84 @@ pub struct Velocity {
 
 #[derive(Type, Deserialize, Serialize, Debug, Clone)]
 
-pub struct VisibleUser {
-    desired_x: Option<i32>,
-    desired_y: Option<i32>,
+pub struct VisibleObject {
+    id: String,
     x: i32,
     y: i32,
     rotation: f32,
     velocity: Velocity,
+    owner_id: String,
+    r#type: VisibleObjectType,
+    hidden: bool,
+}
+
+#[derive(Type, Deserialize, Serialize, Debug, Clone)]
+pub enum VisibleObjectType {
+    Person,
+    Car,
 }
 
 #[derive(Type, Deserialize, Serialize, Debug, Clone)]
 pub struct GameState {
-    visible_users: HashMap<String, VisibleUser>,
+    visible_objects: HashMap<String, VisibleObject>,
 }
 impl GameState {
     fn default() -> GameState {
         let mut hash = HashMap::new();
         hash.insert(
-            "tim".to_string(),
-            VisibleUser {
+            "tim's person".to_string(),
+            VisibleObject {
+                hidden: false,
                 x: 455,
                 y: 789,
-                desired_x: None,
-                desired_y: None,
+                id: "tim's person".to_string(),
                 rotation: 1.57,
-                velocity: Velocity { x: 50, y: 0 },
+                velocity: Velocity { x: 0, y: 0 },
+                owner_id: "tim".to_string(),
+                r#type: VisibleObjectType::Person,
             },
         );
         hash.insert(
-            "bob".to_string(),
-            VisibleUser {
+            "tim's car".to_string(),
+            VisibleObject {
+                hidden: false,
+                x: 455,
+                id: "tim's car".to_string(),
+                y: 789,
+                rotation: 1.57,
+                velocity: Velocity { x: 0, y: 0 },
+                owner_id: "tim".to_string(),
+                r#type: VisibleObjectType::Car,
+            },
+        );
+        hash.insert(
+            "bob's person".to_string(),
+            VisibleObject {
+                hidden: false,
+                id: "bob's person".to_string(),
                 x: 527,
                 y: 789,
-                desired_x: None,
-                desired_y: None,
                 rotation: 180.57,
-                velocity: Velocity { x: -50, y: 0 },
+                velocity: Velocity { x: 0, y: 0 },
+                owner_id: "bob".to_string(),
+                r#type: VisibleObjectType::Person,
+            },
+        );
+        hash.insert(
+            "bob's car".to_string(),
+            VisibleObject {
+                hidden: false,
+                id: "bob's car".to_string(),
+                x: 527,
+                y: 789,
+                rotation: 180.57,
+                velocity: Velocity { x: 0, y: 0 },
+                owner_id: "bob".to_string(),
+                r#type: VisibleObjectType::Car,
             },
         );
         GameState {
-            visible_users: hash,
+            visible_objects: hash,
         }
     }
 }
@@ -216,10 +254,18 @@ impl Lobby {
     }
 
     pub async fn input(&mut self, args: LobbyInputArgs, user_id: String) -> &mut Self {
-        if let Some(player) = self.data.game_state.visible_users.get_mut(&user_id) {
-            player.rotation = args.rotation;
-            player.x = args.x;
-            player.y = args.y;
+        if let Some(player) = self
+            .data
+            .game_state
+            .visible_objects
+            .get_mut(&args.object_id)
+        {
+            if player.owner_id == user_id {
+                player.rotation = args.rotation;
+                player.x = args.x;
+                player.y = args.y;
+                player.hidden = args.hidden;
+            }
             // player.velocity = args
             // for user in &self.data.game_state.visible_users.iter() {
 
