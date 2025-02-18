@@ -14,28 +14,32 @@ export type Procedures = {
         { key: "lobby.subscribe", input: [string, string], result: LobbyCommand }
 };
 
-export type VisibleObject = { id: string; x: number; y: number; rotation: number; velocity: Coordinates; owner_id: string; type: VisibleObjectType; hidden: boolean; animation: string | null }
-
-export type CarSkin = "Sedan" | "Police"
-
 export type AuthResponse = { access_token: string | null; refresh_token: string | null; success: boolean }
 
 export type LoginArgs = { username: string; password: string }
 
 export type LobbyTurnMessage = { messages: string[] }
 
-export type VisibleObjectType = { Person: PersonSkin } | { Car: [CarSkin, number, number] }
+export type CarDetails = { skin: CarSkin; speed: number; max_passengers: number; passenger_user_ids: string[]; rotation_speed: number; driver_user_id: string | null }
+
+export type PersonSkin = "Default"
 
 export type Coordinates = { x: number; y: number }
+
+export type GameObjectInfo = { Person: PersonDetails } | { Car: CarDetails }
+
+export type GameObject = { id: string; x: number; y: number; rotation: number; velocity: Coordinates; owner_user_id: string; info: GameObjectInfo; hidden: boolean; animation: string | null }
 
 export type LobbyInputArgs = { access_token: string; lobby_id: string; object_id: string; rotation: number; x: number; y: number; hidden: boolean; animation: string | null }
 
 export type LobbyChat = { user_id: string; message: string }
 
+export type GameState = { visible_objects: { [key: string]: GameObject } }
+
+export type CarSkin = "Sedan" | "Police"
+
 export type LobbyData = { join_code: string; chat: LobbyChat[]; game_state: GameState }
 
-export type GameState = { visible_objects: { [key: string]: VisibleObject } }
-
-export type PersonSkin = "Default"
-
 export type LobbyCommand = { Updated: LobbyData } | { Messages: string[] } | { DebugMessage: string } | { TurnMessages: LobbyTurnMessage }
+
+export type PersonDetails = { user_id: string; skin: PersonSkin }

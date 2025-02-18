@@ -2,7 +2,6 @@ import Phaser from "phaser";
 import type { Actionable, InputState } from "./actionable";
 import type { PlayerController } from "./player-controller";
 import type { Controllable } from "./controllable";
-import type { VisibleObject } from "@gangsta/rusty";
 import type { ServerUpdatable } from "./updatable";
 import type { PersonObject } from "./utils";
 import { user } from "../../stores/access-token.svelte";
@@ -26,7 +25,7 @@ export class Person implements Controllable, ServerUpdatable {
     const sprite = this.scene.physics.add.sprite(
       state.x,
       state.y,
-      state.type.Person
+      state.info.Person.skin
     );
     console.log(state);
     // sprite.setDisplaySize(this.sprite.width, sprite.displayHeight); sprite.body.setSize(this.sprite.width, sprite.height);
@@ -68,7 +67,7 @@ export class Person implements Controllable, ServerUpdatable {
     this.sprite.setVisible(!this.state.hidden);
 
     if (
-      this.state.owner_id !== user.user?.sub &&
+      this.state.info.Person.user_id !== user.user?.sub &&
       this.state.animation &&
       this.sprite.anims.currentAnim?.key !== this.state.animation
     ) {

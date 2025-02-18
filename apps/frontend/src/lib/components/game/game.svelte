@@ -213,7 +213,7 @@
       const person = new Person(object, this);
       this.actionables.push(person);
 
-      if (object.owner_id === userId) {
+      if (object.info.Person.user_id === userId) {
         this.controller = new PlayerController(user.user!.sub, person);
         this.controller.addEventListener(
           "updated",

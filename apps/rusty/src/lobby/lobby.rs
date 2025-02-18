@@ -1,4 +1,4 @@
-use std::{borrow::BorrowMut, collections::HashMap, sync::Arc, thread::Thread};
+use std::{borrow::BorrowMut, collections::HashMap, sync::Arc, thread::Thread, vec};
 
 use futures::StreamExt;
 
@@ -10,116 +10,6 @@ pub struct LobbyChat {
 impl LobbyChat {
     pub fn new(user_id: String, message: String) -> Self {
         Self { user_id, message }
-    }
-}
-
-#[derive(Type, Deserialize, Serialize, Debug, Clone)]
-pub struct Coordinates {
-    x: i32,
-    y: i32,
-}
-
-#[derive(Type, Deserialize, Serialize, Debug, Clone)]
-
-pub struct VisibleObject {
-    id: String,
-    x: i32,
-    y: i32,
-    rotation: f32,
-    velocity: Coordinates,
-    owner_id: String,
-    r#type: VisibleObjectType,
-    hidden: bool,
-    animation: Option<String>,
-}
-
-#[derive(Type, Deserialize, Serialize, Debug, Clone)]
-pub enum VisibleObjectType {
-    Person(PersonSkin),
-    // starting speed
-    // speed decay over acceleration
-    // top speed
-    // break power
-    Car(CarSkin, i32, i32),
-}
-
-#[derive(Type, Deserialize, Serialize, Debug, Clone)]
-pub enum CarSkin {
-    Sedan,
-    Police,
-}
-
-#[derive(Type, Deserialize, Serialize, Debug, Clone)]
-pub enum PersonSkin {
-    Default,
-}
-
-#[derive(Type, Deserialize, Serialize, Debug, Clone)]
-pub struct GameState {
-    visible_objects: HashMap<String, VisibleObject>,
-}
-impl GameState {
-    fn default() -> GameState {
-        let mut hash = HashMap::new();
-        hash.insert(
-            "tim's person".to_string(),
-            VisibleObject {
-                hidden: false,
-                x: 455,
-                y: 789,
-                id: "tim's person".to_string(),
-                rotation: 1.57,
-                velocity: Coordinates { x: 0, y: 0 },
-                owner_id: "tim".to_string(),
-                r#type: VisibleObjectType::Person(PersonSkin::Default),
-                animation: Some("idle".to_string()),
-            },
-        );
-        hash.insert(
-            "tim's car".to_string(),
-            VisibleObject {
-                hidden: false,
-                x: 455,
-                id: "tim's car".to_string(),
-                y: 789,
-                rotation: 1.57,
-                velocity: Coordinates { x: 0, y: 0 },
-                owner_id: "tim".to_string(),
-                r#type: VisibleObjectType::Car(CarSkin::Sedan, 150, 3),
-                animation: Some("idle".to_string()),
-            },
-        );
-        hash.insert(
-            "bob's person".to_string(),
-            VisibleObject {
-                hidden: false,
-                id: "bob's person".to_string(),
-                x: 527,
-                y: 789,
-                rotation: 180.57,
-                velocity: Coordinates { x: 0, y: 0 },
-                owner_id: "bob".to_string(),
-                r#type: VisibleObjectType::Person(PersonSkin::Default),
-                animation: Some("idle".to_string()),
-            },
-        );
-        hash.insert(
-            "bob's car".to_string(),
-            VisibleObject {
-                hidden: false,
-                id: "bob's car".to_string(),
-                x: 527,
-                y: 789,
-                rotation: 180.57,
-                velocity: Coordinates { x: 0, y: 0 },
-                owner_id: "bob".to_string(),
-                r#type: VisibleObjectType::Car(CarSkin::Police, 250, 4),
-                animation: Some("idle".to_string()),
-            },
-        );
-        GameState {
-            visible_objects: hash,
-        }
     }
 }
 
@@ -162,6 +52,7 @@ use ulid::Ulid;
 
 use crate::{
     error::{AppError, AppResult},
+    game::GameState,
     http::controllers::lobby::LobbyInputArgs,
     services::jwt::Claims,
 };
@@ -193,7 +84,7 @@ impl Lobby {
             .visible_objects
             .get_mut(&args.object_id)
         {
-            if object.owner_id == user_id {
+            if object.owner_user_id == user_id {
                 object.rotation = args.rotation;
                 object.x = args.x;
                 object.y = args.y;

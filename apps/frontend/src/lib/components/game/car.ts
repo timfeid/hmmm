@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { Actionable, InputState } from "./actionable.js";
 import type { PlayerController } from "./player-controller.js";
-import type { Controllable } from "./controllable.js";
+import type { Controllable } from "./costate.infodriveable.js";
 import type { ServerUpdatable } from "./updatable.js";
 import type { CarObject } from "./utils.js";
 import { user } from "../../stores/access-token.svelte.js";
@@ -24,13 +24,16 @@ export class Car implements Controllable, ServerUpdatable {
       carGroup: Phaser.Physics.Arcade.Group;
     }
   ) {
-    const [skin, speed, rotationSpeed] = state.type.Car;
     this.id = state.id;
     this.roadLayer = scene.roadLayer;
-    this.speed = speed;
-    this.rotationSpeed = rotationSpeed;
+    this.speed = state.info.Car.speed;
+    this.rotationSpeed = state.info.Car.rotation_speed;
 
-    const carSprite = this.scene.physics.add.sprite(state.x, state.y, skin);
+    const carSprite = this.scene.physics.add.sprite(
+      state.x,
+      state.y,
+      state.info.Car.skin
+    );
     console.log(state);
     // carSprite.setDisplaySize(26, 58);
     // carSprite.body.setSize(26, 58);
@@ -49,10 +52,12 @@ export class Car implements Controllable, ServerUpdatable {
     // playerController.removeControl();
     // this.sprite.addToDisplayList();
     if (playerController.getControlledEntity() != this) {
+      // this.scene
       playerController.setControlledEntity(this);
       return;
     }
 
+    console.log("exiting.");
     if (
       this.sprite.body?.velocity.x === 0 &&
       this.sprite.body.velocity.y === 0
@@ -62,6 +67,9 @@ export class Car implements Controllable, ServerUpdatable {
   }
 
   takeControl() {
+    if (!this.state.info.Car.driver_user_id) {
+      console.log("we need to take control");
+    }
     console.log("we are here taking control");
   }
 
@@ -89,6 +97,9 @@ export class Car implements Controllable, ServerUpdatable {
     this.scene.cameras.main.startFollow(this.getSprite(), true, 0.08, 0.08);
     this.scene.cameras.main.setDeadzone(100, 100);
 
+    if (this.state.info.Car.driver_user_id !== user.user?.sub) {
+      return;
+    }
     const dt = delta / 1000;
     let desiredVX = 0;
     let desiredVY = 0;
@@ -161,10 +172,9 @@ export class Car implements Controllable, ServerUpdatable {
       console.log("no state yet");
       return;
     }
-    const [skin, speed, rotationSpeed] = this.state.type.Car;
-    this.speed = speed;
-    this.rotationSpeed = rotationSpeed;
-    this.sprite.setTexture(skin);
+    this.speed = this.state.info.Car.speed;
+    this.rotationSpeed = this.state.info.Car.rotation_speed;
+    this.sprite.setTexture(this.state.info.Car.skin);
     // this.sprite.anims.play(skin)
 
     const elapsed = time - this.lastServerUpdateTime;
@@ -186,7 +196,7 @@ export class Car implements Controllable, ServerUpdatable {
     );
 
     if (
-      this.state.owner_id !== user.user?.sub &&
+      this.state.info.driver_user_id !== user.user?.sub &&
       this.state.animation &&
       this.sprite.anims.currentAnim?.key !== this.state.animation
     ) {

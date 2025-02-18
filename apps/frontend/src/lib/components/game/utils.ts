@@ -1,26 +1,26 @@
 import type {
-  CarSkin,
+  CarDetails,
+  GameObject,
+  PersonDetails,
   PersonSkin,
-  VisibleObject,
-  VisibleObjectType,
 } from "@gangsta/rusty";
 
-export type CarObject = VisibleObject & {
-  type: {
-    Car: [CarSkin, number, number];
+export type CarObject = GameObject & {
+  info: {
+    Car: CarDetails;
   };
 };
 
-export function isCar(data: VisibleObject): data is CarObject {
-  return "Car" in data.type;
+export function isCar(data: GameObject): data is CarObject {
+  return "Car" in data.info;
 }
 
-export type PersonObject = VisibleObject & {
-  type: {
-    Person: PersonSkin;
+export type PersonObject = GameObject & {
+  info: {
+    Person: PersonDetails;
   };
 };
 
-export function isPerson(data: VisibleObject): data is PersonObject {
-  return "Person" in data.type;
+export function isPerson(data: GameObject): data is PersonObject {
+  return "Person" in data.info;
 }

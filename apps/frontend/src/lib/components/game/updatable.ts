@@ -1,10 +1,6 @@
-import type { VisibleObject } from "@gangsta/rusty";
+import type { GameObject } from "@gangsta/rusty";
 
 export interface ServerUpdatable {
-  state: VisibleObject;
-  updateInputFromServer(
-    state: VisibleObject,
-    time: number,
-    delta: number
-  ): void;
+  state: GameObject;
+  updateInputFromServer(state: GameObject, time: number, delta: number): void;
 }
