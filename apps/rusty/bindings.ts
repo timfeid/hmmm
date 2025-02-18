@@ -14,9 +14,9 @@ export type Procedures = {
         { key: "lobby.subscribe", input: [string, string], result: LobbyCommand }
 };
 
-export type GameState = { visible_objects: { [key: string]: VisibleObject } }
+export type VisibleObject = { id: string; x: number; y: number; rotation: number; velocity: Coordinates; owner_id: string; type: VisibleObjectType; hidden: boolean; animation: string | null }
 
-export type VisibleObject = { id: string; x: number; y: number; rotation: number; velocity: Velocity; owner_id: string; type: VisibleObjectType; hidden: boolean }
+export type CarSkin = "Sedan" | "Police"
 
 export type AuthResponse = { access_token: string | null; refresh_token: string | null; success: boolean }
 
@@ -24,14 +24,18 @@ export type LoginArgs = { username: string; password: string }
 
 export type LobbyTurnMessage = { messages: string[] }
 
-export type VisibleObjectType = "Person" | "Car"
+export type VisibleObjectType = { Person: PersonSkin } | { Car: [CarSkin, number, number] }
 
-export type LobbyInputArgs = { access_token: string; lobby_id: string; object_id: string; rotation: number; x: number; y: number; hidden: boolean }
+export type Coordinates = { x: number; y: number }
+
+export type LobbyInputArgs = { access_token: string; lobby_id: string; object_id: string; rotation: number; x: number; y: number; hidden: boolean; animation: string | null }
 
 export type LobbyChat = { user_id: string; message: string }
 
 export type LobbyData = { join_code: string; chat: LobbyChat[]; game_state: GameState }
 
-export type LobbyCommand = { Updated: LobbyData } | { Messages: string[] } | { DebugMessage: string } | { TurnMessages: LobbyTurnMessage }
+export type GameState = { visible_objects: { [key: string]: VisibleObject } }
 
-export type Velocity = { x: number; y: number }
+export type PersonSkin = "Default"
+
+export type LobbyCommand = { Updated: LobbyData } | { Messages: string[] } | { DebugMessage: string } | { TurnMessages: LobbyTurnMessage }

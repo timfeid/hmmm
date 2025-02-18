@@ -5,6 +5,7 @@ export type InputState = {
   x: number;
   y: number;
   hidden: boolean;
+  animation?: string;
 };
 
 export interface Actionable {

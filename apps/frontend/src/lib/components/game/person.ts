@@ -4,6 +4,8 @@ import type { PlayerController } from "./player-controller";
 import type { Controllable } from "./controllable";
 import type { VisibleObject } from "@gangsta/rusty";
 import type { ServerUpdatable } from "./updatable";
+import type { PersonObject } from "./utils";
+import { user } from "../../stores/access-token.svelte";
 
 export class Person implements Controllable, ServerUpdatable {
   id: string;
@@ -15,15 +17,27 @@ export class Person implements Controllable, ServerUpdatable {
   private expectedUpdateInterval: number = 64;
 
   constructor(
-    public state: VisibleObject,
-    private readonly scene: Phaser.Scene,
-    sprite: Phaser.Physics.Arcade.Sprite
+    public state: PersonObject,
+    private readonly scene: Phaser.Scene & {
+      personGroup: Phaser.Physics.Arcade.Group;
+    }
   ) {
     this.id = state.id;
+    const sprite = this.scene.physics.add.sprite(
+      state.x,
+      state.y,
+      state.type.Person
+    );
+    console.log(state);
+    // sprite.setDisplaySize(this.sprite.width, sprite.displayHeight); sprite.body.setSize(this.sprite.width, sprite.height);
+    sprite.setDepth(1);
+    sprite.setCollideWorldBounds(true);
+    scene.personGroup.add(sprite);
     this.sprite = sprite;
+    console.log("added.");
   }
 
-  updateInputFromServer(state: VisibleObject, time: number, delta: number) {
+  updateInputFromServer(state: PersonObject, time: number, delta: number) {
     this.state = state;
     this.update(time, delta);
     this.lastServerUpdateTime = time;
@@ -52,6 +66,14 @@ export class Person implements Controllable, ServerUpdatable {
       this.rotationSpeed * (delta / 1000)
     );
     this.sprite.setVisible(!this.state.hidden);
+
+    if (
+      this.state.owner_id !== user.user?.sub &&
+      this.state.animation &&
+      this.sprite.anims.currentAnim?.key !== this.state.animation
+    ) {
+      this.sprite.anims.play(this.state.animation);
+    }
   }
 
   getSprite(): Phaser.Physics.Arcade.Sprite {
@@ -82,7 +104,8 @@ export class Person implements Controllable, ServerUpdatable {
 
   updateInput(cursors: Phaser.Types.Input.Keyboard.CursorKeys, delta: number) {
     this.scene.cameras.main.startFollow(this.getSprite(), true, 0.08, 0.08);
-    this.scene.cameras.main.setDeadzone(100, 100);
+    this.scene.cameras.main.setDeadzone(50, 50);
+    this.scene.cameras.main.setZoom(1);
     const dt = delta / 1000;
     let vx = 0,
       vy = 0;
@@ -96,7 +119,7 @@ export class Person implements Controllable, ServerUpdatable {
     } else if (cursors.right.isDown) {
       vx = this.speed;
     }
-    if (vx > 0 || vy > 0) {
+    if (vx !== 0 || vy !== 0) {
       if (this.sprite.anims.currentAnim?.key !== "walk") {
         this.sprite.anims.play("walk");
       }
@@ -114,6 +137,7 @@ export class Person implements Controllable, ServerUpdatable {
       x: Math.round(this.sprite.x),
       y: Math.round(this.sprite.y),
       hidden: !this.sprite.visible,
+      animation: this.sprite.anims.currentAnim?.key,
     };
   }
 }

@@ -12,6 +12,7 @@
   import { toast } from "svelte-sonner";
   import type { ServerUpdatable } from "./updatable";
   import type { Controllable } from "./controllable";
+  import { isCar, isPerson, type CarObject, type PersonObject } from "./utils";
 
   const userId = $derived(user.user?.sub || "");
 
@@ -25,13 +26,15 @@
     private action!: Phaser.Input.Keyboard.Key;
     private actionables: Array<any> = [];
     private tileSize: number = 16;
+    private tilePosText!: Phaser.GameObjects.Text;
+
     personGroup!: Phaser.Physics.Arcade.Group;
 
     preload() {
       this.load.tilemapTiledJSON("map", "/assets/map.json");
       this.load.image("tiles", "/assets/tiles.png");
-      this.load.image("car-north", "/assets/car/car-north.png");
-      this.load.image("car-south", "/assets/car/car-south.png");
+      this.load.image("Sedan", "/assets/car/car.png");
+      this.load.image("Police", "/assets/car/police.png");
       // this.load.image("person-idle", "/assets/person/idle.png");
       this.load.spritesheet("person-run", "/assets/person/run.png", {
         frameWidth: 16,
@@ -78,8 +81,22 @@
       // });
     }
 
+    createDebugBox() {
+      this.tilePosText = this.add.text(0, 0, "Tile: (0, 0)", {
+        fontSize: "16px",
+        color: "#ffffff",
+        backgroundColor: "#00000080",
+      });
+      this.tilePosText.setScrollFactor(0);
+      this.tilePosText.setOrigin(1, 0); // right-align horizontally, top-align vertically
+      // Update its position to be at the right edge of the camera:
+      this.tilePosText.setPosition(this.cameras.main.width - 10, 10);
+      this.tilePosText.setDepth(400);
+    }
+
     create() {
       this.carGroup = this.physics.add.group();
+      this.createDebugBox();
       this.personGroup = this.physics.add.group();
       this.lights.enable().setAmbientColor(0xcccccc); // dark ambient light
       this.physics.add.collider(
@@ -192,16 +209,8 @@
       // Subscribe to server state updates as needed.
     }
 
-    createPerson(object: VisibleObject) {
-      const personSprite = this.physics.add.sprite(485, 752, "person-idle", 0);
-      personSprite.anims.play("idle");
-
-      personSprite.setDisplaySize(this.tileSize, this.tileSize);
-      personSprite.body.setSize(this.tileSize, this.tileSize);
-      personSprite.setDepth(1);
-      personSprite.setCollideWorldBounds(true);
-      const person = new Person(object, this, personSprite);
-      this.personGroup.add(personSprite);
+    createPerson(object: PersonObject) {
+      const person = new Person(object, this);
       this.actionables.push(person);
 
       if (object.owner_id === userId) {
@@ -218,27 +227,34 @@
       return person;
     }
 
-    createCar(object: VisibleObject) {
-      const carSprite = this.physics.add.sprite(490, 677, "car-north");
-      carSprite.setDisplaySize(this.tileSize * 2, this.tileSize * 2);
-      carSprite.body.setSize(this.tileSize * 2, this.tileSize * 2);
-      carSprite.setDepth(1);
-      carSprite.setCollideWorldBounds(true);
-      const car = new Car(object, this, carSprite, 220, 5);
+    createCar(object: CarObject) {
+      const car = new Car(object, this);
       this.actionables.push(car);
 
       return car;
     }
 
     createObject(object: VisibleObject) {
-      if (object.type === "Car") {
+      if (isCar(object)) {
         return this.createCar(object);
       }
-      if (object.type === "Person") {
+
+      if (isPerson(object)) {
         return this.createPerson(object);
       }
 
       throw new Error("Unknown object" + object.type);
+    }
+
+    updateDebugBox() {
+      if (!this.controller) {
+        return;
+      }
+      const sprite = this.controller.getControlledEntity().sprite;
+      const tileX = Math.floor(sprite.x / this.tileSize);
+      const tileY = Math.floor(sprite.y / this.tileSize);
+
+      this.tilePosText.setText(`Tile: (${tileX}, ${tileY})`);
     }
 
     updateObjects(time: number, delta: number) {
@@ -299,12 +315,12 @@
 
     update(time: number, delta: number) {
       this.updateObjects(time, delta);
+      this.updateDebugBox();
 
       if (!this.controller) {
         console.log("oh no controller");
         return;
       }
-
       this.controller.update(this.cursors, delta);
       if (Phaser.Input.Keyboard.JustDown(this.action)) {
         this.controller.action(this.actionables);
@@ -351,6 +367,8 @@
       }
     };
   });
+  const width = 1920;
+  const height = 1080;
 
   $effect(() => {
     if (!game && lobby) {
@@ -361,6 +379,8 @@
           default: "arcade",
           arcade: { gravity: { y: 0, x: 0 } },
         },
+        width,
+        height,
       });
     }
   });

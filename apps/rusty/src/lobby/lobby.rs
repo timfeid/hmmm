@@ -14,7 +14,7 @@ impl LobbyChat {
 }
 
 #[derive(Type, Deserialize, Serialize, Debug, Clone)]
-pub struct Velocity {
+pub struct Coordinates {
     x: i32,
     y: i32,
 }
@@ -26,16 +26,32 @@ pub struct VisibleObject {
     x: i32,
     y: i32,
     rotation: f32,
-    velocity: Velocity,
+    velocity: Coordinates,
     owner_id: String,
     r#type: VisibleObjectType,
     hidden: bool,
+    animation: Option<String>,
 }
 
 #[derive(Type, Deserialize, Serialize, Debug, Clone)]
 pub enum VisibleObjectType {
-    Person,
-    Car,
+    Person(PersonSkin),
+    // starting speed
+    // speed decay over acceleration
+    // top speed
+    // break power
+    Car(CarSkin, i32, i32),
+}
+
+#[derive(Type, Deserialize, Serialize, Debug, Clone)]
+pub enum CarSkin {
+    Sedan,
+    Police,
+}
+
+#[derive(Type, Deserialize, Serialize, Debug, Clone)]
+pub enum PersonSkin {
+    Default,
 }
 
 #[derive(Type, Deserialize, Serialize, Debug, Clone)]
@@ -53,9 +69,10 @@ impl GameState {
                 y: 789,
                 id: "tim's person".to_string(),
                 rotation: 1.57,
-                velocity: Velocity { x: 0, y: 0 },
+                velocity: Coordinates { x: 0, y: 0 },
                 owner_id: "tim".to_string(),
-                r#type: VisibleObjectType::Person,
+                r#type: VisibleObjectType::Person(PersonSkin::Default),
+                animation: Some("idle".to_string()),
             },
         );
         hash.insert(
@@ -66,9 +83,10 @@ impl GameState {
                 id: "tim's car".to_string(),
                 y: 789,
                 rotation: 1.57,
-                velocity: Velocity { x: 0, y: 0 },
+                velocity: Coordinates { x: 0, y: 0 },
                 owner_id: "tim".to_string(),
-                r#type: VisibleObjectType::Car,
+                r#type: VisibleObjectType::Car(CarSkin::Sedan, 150, 3),
+                animation: Some("idle".to_string()),
             },
         );
         hash.insert(
@@ -79,9 +97,10 @@ impl GameState {
                 x: 527,
                 y: 789,
                 rotation: 180.57,
-                velocity: Velocity { x: 0, y: 0 },
+                velocity: Coordinates { x: 0, y: 0 },
                 owner_id: "bob".to_string(),
-                r#type: VisibleObjectType::Person,
+                r#type: VisibleObjectType::Person(PersonSkin::Default),
+                animation: Some("idle".to_string()),
             },
         );
         hash.insert(
@@ -92,9 +111,10 @@ impl GameState {
                 x: 527,
                 y: 789,
                 rotation: 180.57,
-                velocity: Velocity { x: 0, y: 0 },
+                velocity: Coordinates { x: 0, y: 0 },
                 owner_id: "bob".to_string(),
-                r#type: VisibleObjectType::Car,
+                r#type: VisibleObjectType::Car(CarSkin::Police, 250, 4),
+                animation: Some("idle".to_string()),
             },
         );
         GameState {
@@ -129,84 +149,9 @@ pub struct Lobby {
     client: Option<Client>,
 
     pub data: LobbyData,
-    // #[serde(skip_serializing, skip_deserializing)]
-    // game: Arc<Mutex<Game>>,
 }
 
-impl Lobby {
-    // pub async fn get_state(&self) -> PublicGameInfo {
-    //     let priority_queue = {
-    //         let game = self.game.lock().await;
-    //         if let Some((player, time_left, _)) = &game.current_priority_player {
-    //             Some(PriorityQueue {
-    //                 player_id: player.lock().await.name.clone(),
-    //                 time_left: time_left.clone(),
-    //             })
-    //         } else {
-    //             None
-    //         }
-    //     };
-
-    //     let combat = self.game.lock().await.combat.clone();
-    //     let blocks = {
-    //         let mut blocks = vec![];
-    //         for (blocker, attacker) in combat.blockers.iter() {
-    //             blocks.push(Block {
-    //                 attacker: {
-    //                     Game::frontend_target_from_card(&self.game, attacker)
-    //                         .await
-    //                         .expect("hm")
-    //                 },
-    //                 blocker: {
-    //                     Game::frontend_target_from_card(&self.game, blocker)
-    //                         .await
-    //                         .expect("hm")
-    //                 },
-    //             })
-    //         }
-
-    //         blocks
-    //     };
-
-    //     let attacks = {
-    //         let mut attacks = vec![];
-    //         let cloned_game = self.cloned_game();
-    //         let game = cloned_game.lock().await;
-    //         if let Some(turn) = game.current_turn.clone() {
-    //             let player = &turn.current_player;
-    //             let player_id = turn.current_player.lock().await.name.clone();
-    //             let cards = player.lock().await.cards_in_play.clone();
-    //             for (index, card) in cards.iter().enumerate() {
-    //                 for (attacker, target) in game.combat.attackers.iter() {
-    //                     if Arc::ptr_eq(attacker, card) {
-    //                         attacks.push(Attack {
-    //                             target: target.clone(),
-    //                             attacker: FrontendCardTarget {
-    //                                 player_id: player_id.clone(),
-    //                                 pile: FrontendPileName::Play,
-    //                                 card_index: index as i32,
-    //                             },
-    //                         });
-    //                     }
-    //                 }
-    //             }
-    //         }
-
-    //         attacks
-    //     };
-
-    //     PublicGameInfo {
-    //         current_turn: self.game.lock().await.current_turn.clone(),
-    //         priority_queue,
-    //         attacks,
-    //         blocks,
-    //     }
-    // }
-
-    // pub fn cloned_game(&self) -> Arc<Mutex<Game>> {
-    //     Arc::clone(&self.game)
-    // }
-}
+impl Lobby {}
 
 use redis::Client;
 use serde::{Deserialize, Serialize};
@@ -214,18 +159,6 @@ use specta::Type;
 use tokio::sync::{Mutex, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use ulid::Ulid;
-
-#[derive(Type, Deserialize, Clone, Serialize, Debug)]
-pub enum DeckSelector {
-    // Elves,
-    // Elves2,
-    // Blue,
-    // Black,
-    // Angels,
-    Vegas,
-    // AngelsBlue,
-    // Red,
-}
 
 use crate::{
     error::{AppError, AppResult},
@@ -254,43 +187,25 @@ impl Lobby {
     }
 
     pub async fn input(&mut self, args: LobbyInputArgs, user_id: String) -> &mut Self {
-        if let Some(player) = self
+        if let Some(object) = self
             .data
             .game_state
             .visible_objects
             .get_mut(&args.object_id)
         {
-            if player.owner_id == user_id {
-                player.rotation = args.rotation;
-                player.x = args.x;
-                player.y = args.y;
-                player.hidden = args.hidden;
+            if object.owner_id == user_id {
+                object.rotation = args.rotation;
+                object.x = args.x;
+                object.y = args.y;
+                object.hidden = args.hidden;
+                object.animation = args.animation;
             }
-            // player.velocity = args
-            // for user in &self.data.game_state.visible_users.iter() {
-
-            // }
-            // self.data.game_state.visible_users = PlayerStatus::Ready;
-            // let mut p = player.player.lock().await;
-            // let mut deck = Deck::new_from_selection(&player.deck);
-            // deck.set_owner(&player.player).await;
-
-            // p.deck = deck;
         }
 
         self
     }
 
     pub async fn ready(&mut self, user: &Claims) -> &mut Self {
-        // if let Some(player) = self.data.game_state.players.get_mut(&user.sub) {
-        //     player.status = PlayerStatus::Ready;
-        //     let mut p = player.player.lock().await;
-        //     let mut deck = Deck::new_from_selection(&player.deck);
-        //     deck.set_owner(&player.player).await;
-
-        //     p.deck = deck;
-        // }
-
         self
     }
 

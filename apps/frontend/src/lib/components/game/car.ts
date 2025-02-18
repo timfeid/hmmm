@@ -2,8 +2,9 @@ import Phaser from "phaser";
 import type { Actionable, InputState } from "./actionable.js";
 import type { PlayerController } from "./player-controller.js";
 import type { Controllable } from "./controllable.js";
-import type { VisibleObject } from "@gangsta/rusty";
 import type { ServerUpdatable } from "./updatable.js";
+import type { CarObject } from "./utils.js";
+import { user } from "../../stores/access-token.svelte.js";
 
 export class Car implements Controllable, ServerUpdatable {
   id: string;
@@ -17,21 +18,27 @@ export class Car implements Controllable, ServerUpdatable {
   private expectedUpdateInterval: number = 64;
 
   constructor(
-    public state: VisibleObject,
+    public state: CarObject,
     private readonly scene: Phaser.Scene & {
       roadLayer: Phaser.Tilemaps.TilemapLayer;
       carGroup: Phaser.Physics.Arcade.Group;
-    },
-    sprite: Phaser.Physics.Arcade.Sprite,
-    speed = 100,
-    rotationSpeed = 3
+    }
   ) {
-    scene.carGroup.add(sprite);
+    const [skin, speed, rotationSpeed] = state.type.Car;
     this.id = state.id;
     this.roadLayer = scene.roadLayer;
-    this.sprite = sprite;
     this.speed = speed;
     this.rotationSpeed = rotationSpeed;
+
+    const carSprite = this.scene.physics.add.sprite(state.x, state.y, skin);
+    console.log(state);
+    // carSprite.setDisplaySize(26, 58);
+    // carSprite.body.setSize(26, 58);
+    carSprite.setDepth(1);
+    carSprite.setCollideWorldBounds(true);
+    scene.carGroup.add(carSprite);
+    this.sprite = carSprite;
+    console.log("added.");
   }
 
   isActionable(userId: string): boolean {
@@ -86,52 +93,44 @@ export class Car implements Controllable, ServerUpdatable {
     let desiredVX = 0;
     let desiredVY = 0;
 
-    // Rotation control using left/right keys.
     if (cursors.left.isDown) {
       this.sprite.rotation -= this.rotationSpeed * dt;
     } else if (cursors.right.isDown) {
       this.sprite.rotation += this.rotationSpeed * dt;
     }
 
-    // Calculate the intended movement direction.
-    // Our car image is drawn so that 0 rotation faces upward.
-    // We subtract π/2 to have the car move in the direction it's facing.
     const direction = this.sprite.rotation - Math.PI / 2;
 
     if (cursors.up.isDown) {
       desiredVX = Math.cos(direction) * this.speed;
       desiredVY = Math.sin(direction) * this.speed;
-      this.sprite.setTexture("car-north");
     } else if (cursors.down.isDown) {
       desiredVX = -Math.cos(direction) * this.speed;
       desiredVY = -Math.sin(direction) * this.speed;
-      this.sprite.setTexture("car-south");
     }
 
     const newX = this.sprite.x + desiredVX * dt;
     const newY = this.sprite.y + desiredVY * dt;
     const tile = this.roadLayer.getTileAtWorldXY(newX, newY);
 
+    if (!this.sprite.body || !("setVelocity" in this.sprite.body)) {
+      return;
+    }
+
     if (tile) {
-      // If valid (on a road), allow movement.
       this.sprite.body.setVelocity(desiredVX, desiredVY);
     } else {
-      // Not a valid road tile: stop movement.
       this.sprite.body.setVelocity(0, 0);
 
-      // Trigger the bump effect only if not already bumping.
       if (!this.isBumping) {
         this.isBumping = true;
-        // Determine a small offset based on movement direction.
         let bumpX = 0,
           bumpY = 0;
-        // Use the dominant direction (or a fixed offset if desired).
         if (Math.abs(desiredVX) >= Math.abs(desiredVY)) {
           bumpX = desiredVX >= 0 ? -5 : 5;
         } else {
           bumpY = desiredVY >= 0 ? -5 : 5;
         }
-        // Apply a small tween to simulate a bump.
         this.sprite.scene.tweens.add({
           targets: this.sprite,
           x: this.sprite.x + bumpX,
@@ -143,7 +142,6 @@ export class Car implements Controllable, ServerUpdatable {
             this.isBumping = false;
           },
         });
-        // Flash red briefly.
         this.sprite.setTint(0xff0000);
         this.sprite.scene.time.delayedCall(100, () => {
           this.sprite.clearTint();
@@ -152,7 +150,7 @@ export class Car implements Controllable, ServerUpdatable {
     }
   }
 
-  updateInputFromServer(state: VisibleObject, time: number, delta: number) {
+  updateInputFromServer(state: CarObject, time: number, delta: number) {
     this.state = state;
     this.update(time, delta);
     this.lastServerUpdateTime = time;
@@ -163,6 +161,12 @@ export class Car implements Controllable, ServerUpdatable {
       console.log("no state yet");
       return;
     }
+    const [skin, speed, rotationSpeed] = this.state.type.Car;
+    this.speed = speed;
+    this.rotationSpeed = rotationSpeed;
+    this.sprite.setTexture(skin);
+    // this.sprite.anims.play(skin)
+
     const elapsed = time - this.lastServerUpdateTime;
     const currentX = this.sprite.x;
     const currentY = this.sprite.y;
@@ -180,6 +184,14 @@ export class Car implements Controllable, ServerUpdatable {
       targetRotation,
       this.rotationSpeed * (delta / 1000)
     );
+
+    if (
+      this.state.owner_id !== user.user?.sub &&
+      this.state.animation &&
+      this.sprite.anims.currentAnim?.key !== this.state.animation
+    ) {
+      this.sprite.anims.play(this.state.animation);
+    }
   }
 
   getInputState(): InputState {
@@ -188,6 +200,7 @@ export class Car implements Controllable, ServerUpdatable {
       x: Math.round(this.sprite.x),
       y: Math.round(this.sprite.y),
       hidden: !this.sprite.visible,
+      animation: this.sprite.anims.currentAnim?.key,
     };
   }
 }

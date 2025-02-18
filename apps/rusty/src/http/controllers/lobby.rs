@@ -15,7 +15,7 @@ use crate::{
     error::{AppError, AppResult},
     http::context::Ctx,
     lobby::{
-        lobby::{DeckSelector, Lobby, LobbyChat, LobbyData},
+        lobby::{Lobby, LobbyChat, LobbyData},
         manager::{LobbyCommand, LobbyManager},
     },
     services::jwt::{Claims, JwtService},
@@ -46,6 +46,7 @@ pub struct LobbyInputArgs {
     pub x: i32,
     pub y: i32,
     pub hidden: bool,
+    pub animation: Option<String>,
 }
 
 impl LobbyController {
