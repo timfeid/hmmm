@@ -1,11 +1,12 @@
 use std::{
+    collections::HashMap,
     sync::Arc,
     thread::{sleep, Thread},
     time::Duration,
 };
 
 use async_stream::stream;
-use futures::Stream;
+use futures::{pin_mut, Stream};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tokio::sync::{Mutex, MutexGuard};
@@ -13,35 +14,55 @@ use tokio_stream::StreamExt;
 
 use crate::{
     error::{AppError, AppResult},
+    gangsta::GameObject,
     http::context::Ctx,
     lobby::{
         lobby::{Lobby, LobbyChat, LobbyData},
-        manager::{LobbyCommand, LobbyManager},
+        manager::LobbyManager,
     },
     services::jwt::{Claims, JwtService},
 };
 
-fn personalize_lobby_data_for_player(command: &mut LobbyCommand, user_id: &str) {
-    // if let LobbyCommand::Updated(lobby_data) = command {
-    //     for (id, player_state) in &mut lobby_data.game_state.players {
-    //         if id != user_id {
-    //             player_state.hand.clear();
-    //         }
-    //     }
-    // }
+#[derive(Type, Serialize, Deserialize, Debug)]
+pub struct PersonalizedGameData {
+    visible_objects: HashMap<String, GameObject>,
+}
+
+impl PersonalizedGameData {
+    pub async fn new(command: &LobbyData, user_id: &str) -> PersonalizedGameData {
+        // if let LobbyCommand::Updated(lobby_data) = command {
+        //     for (id, player_state) in &mut lobby_data.game_state.players {
+        //         if id != user_id {
+        //             player_state.hand.clear();
+        //         }
+        //     }
+        // }
+        PersonalizedGameData {
+            visible_objects: command
+                .game
+                .get_state()
+                .lock()
+                .await
+                .clone()
+                .visible_objects,
+        }
+    }
 }
 
 pub struct LobbyController {}
+
+#[derive(Type, Deserialize, Debug)]
+pub struct LobbyActionArgs {
+    access_token: String,
+    lobby_id: String,
+    pub action_id: String,
+}
 
 #[derive(Type, Deserialize, Debug)]
 pub struct LobbyInputArgs {
     access_token: String,
     lobby_id: String,
     pub object_id: String,
-    // pub up: bool,
-    // pub down: bool,
-    // pub left: bool,
-    // pub right: bool,
     pub rotation: f32,
     pub x: i32,
     pub y: i32,
@@ -81,7 +102,7 @@ impl LobbyController {
         tokio::spawn(async move {
             loop {
                 mng.notify_lobby(&join_code_cloned).await.ok();
-                sleep(Duration::from_millis(8));
+                sleep(Duration::from_millis(3));
             }
         });
 
@@ -99,22 +120,47 @@ impl LobbyController {
     }
 
     pub(crate) async fn input(ctx: Ctx, args: LobbyInputArgs) -> AppResult<()> {
-        // let user = ctx.required_user()?;
         let user_claims = JwtService::decode(&args.access_token).unwrap().claims;
         let lobby = ctx
             .lobby_manager
             .get_lobby(&args.lobby_id)
             .await
             .map_err(|x| AppError::BadRequest("Bad lobby id".to_string()))?;
-        // let data = &lobby.lock().await.data;
 
-        // println!("adding message to lobby {} {:?}", data.join_code, lobby);
+        lobby
+            .lock()
+            .await
+            .data
+            .game
+            .input(
+                user_claims.sub,
+                args.object_id,
+                args.rotation,
+                args.x,
+                args.y,
+                args.hidden,
+                args.animation,
+            )
+            .await;
 
-        // println!("{:?}", args);
-        lobby.lock().await.input(args, user_claims.sub).await;
-        // println!("added, notifying lobby");
-        // lobby.lock().await.message(user, args.text);
-        // ctx.lobby_manager.notify_lobby(&args.lobby_id).await.ok();
+        Ok(())
+    }
+
+    pub(crate) async fn action(ctx: Ctx, args: LobbyActionArgs) -> AppResult<()> {
+        let user_claims = JwtService::decode(&args.access_token).unwrap().claims;
+        let lobby = ctx
+            .lobby_manager
+            .get_lobby(&args.lobby_id)
+            .await
+            .map_err(|x| AppError::BadRequest("Bad lobby id".to_string()))?;
+
+        lobby
+            .lock()
+            .await
+            .data
+            .game
+            .action(user_claims.sub, args.action_id)
+            .await?;
 
         Ok(())
     }
@@ -123,41 +169,24 @@ impl LobbyController {
         ctx: Ctx,
         join_code: String,
         access_token: String,
-    ) -> impl Stream<Item = LobbyCommand> + Send + 'static {
+    ) -> impl Stream<Item = PersonalizedGameData> + Send + 'static {
         let manager = Arc::clone(&ctx.lobby_manager);
         let user_claims = JwtService::decode(&access_token).unwrap().claims;
 
-        let async_stream = stream! {
-            if let Ok(mut post_stream) = manager.subscribe_to_lobby_updates(join_code, access_token).await {
-                while let Some(mut lobby_data) = post_stream.next().await {
-                        match &lobby_data {
-                            // LobbyCommand::ChooseFromSelection(ability_details) => {
-                            //     if ability_details.player_id == user_claims.sub.clone() {
-                            //         yield lobby_data;
-                            //     }
-                            // },
-                            // LobbyCommand::MandatoryExecuteAbility(ability_details) => {
-                            //     if ability_details.player_id == user_claims.sub.clone() {
-                            //         yield lobby_data;
-                            //     }
-                            // },
-                            // LobbyCommand::AskExecuteAbility(ability_details) => {
-                            //     if ability_details.player_id == user_claims.sub.clone() {
-                            //         yield lobby_data;
-                            //     }
-                            // },
-                            _ => {
-                                personalize_lobby_data_for_player(&mut lobby_data, &user_claims.sub);
+        async_stream::stream! {
+            match manager.subscribe_to_lobby_updates(join_code, user_claims).await {
+                Ok(mut post_stream) => {
+                    println!("Subscribed to lobby updates");
+                    pin_mut!(post_stream);
 
-                                yield lobby_data;
-                            }
-                        }
-
-
+                    while let Some(item) = post_stream.next().await {
+                        yield item;
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error subscribing to lobby updates: {:?}", e);
                 }
             }
-        };
-        let async_stream = async_stream;
-        async_stream
+        }
     }
 }

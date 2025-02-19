@@ -1,11 +1,12 @@
 use futures::stream::StreamExt;
-use futures::Stream;
-use redis::aio::PubSub;
-use redis::{AsyncCommands, Client};
+use tokio_stream::wrappers::BroadcastStream;
+
+use futures::{future, Stream};
+use jsonwebtoken::TokenData;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use specta::Type;
-use tokio::sync::mpsc;
+use tokio::sync::{broadcast, mpsc};
 use tokio::task;
 use tokio::time::timeout;
 use tokio_stream::wrappers::ReceiverStream;
@@ -20,11 +21,11 @@ use tokio::sync::Mutex;
 
 use super::lobby::{Lobby, LobbyData};
 use crate::error::{AppError, AppResult};
+use crate::http::controllers::lobby::PersonalizedGameData;
 use crate::services::jwt::{Claims, JwtService};
 
 #[derive(Clone)]
 pub struct LobbyManager {
-    redis_client: Arc<redis::Client>,
     lobbies: Arc<Mutex<HashMap<String, Arc<Mutex<Lobby>>>>>,
 }
 
@@ -63,15 +64,6 @@ impl std::fmt::Debug for ModalButton {
             .field("text", &self.text)
             .finish()
     }
-}
-
-#[derive(Type, Clone, Deserialize, Serialize, Debug)]
-#[specta(export = false)]
-pub enum LobbyCommand {
-    Updated(LobbyData),
-    Messages(Vec<String>),
-    DebugMessage(String),
-    TurnMessages(LobbyTurnMessage),
 }
 
 impl std::fmt::Debug for LobbyManager {
@@ -135,50 +127,67 @@ impl LobbyManager {
         Ok(lobby)
     }
 
-    // Stream game updates from Redis for a specific lobby
     pub async fn subscribe_to_lobby_updates(
         &self,
         lobby_id: String,
-        access_token: String,
-    ) -> AppResult<impl Stream<Item = LobbyCommand>> {
-        let user = JwtService::decode(&access_token).or(Err(AppError::Unauthorized))?;
-        let (tx, rx) = mpsc::channel::<LobbyCommand>(100);
+        claims: Claims,
+    ) -> AppResult<impl tokio_stream::Stream<Item = PersonalizedGameData>> {
+        // Look up the lobby.
+        let lobby_arc = {
+            let lobbies = self.lobbies.lock().await;
+            lobbies
+                .get(&lobby_id)
+                .ok_or(AppError::BadRequest("Lobby not found".to_owned()))?
+                .clone()
+        };
 
-        println!("{:?} has joined!", user.claims);
+        // Lock the lobby briefly to extract the broadcast sender.
+        let pub_tx = {
+            let lobby = lobby_arc.lock().await;
+            lobby.pub_tx.clone().ok_or(AppError::InternalServerError(
+                "PubSub not initialized".to_owned(),
+            ))?
+        };
 
-        // Clone redis client so it can be passed into the async block.
-        let redis_client = Arc::clone(&self.redis_client);
+        // Subscribe to the broadcast channel.
+        let rx = pub_tx.subscribe();
 
-        // Spawn the Redis subscription in a new task, but keep the mutex scope minimal
-        tokio::spawn(async move {
-            if let Err(e) = Self::handle_lobby_subscription(redis_client, lobby_id, tx).await {
-                eprintln!("Error in subscription: {:?}", e);
+        // Wrap the broadcast receiver in a stream and map the data.
+        let stream = BroadcastStream::new(rx).filter_map(move |result| {
+            let claims_cl = claims.clone();
+            async move {
+                match result {
+                    Ok(data) => Some(PersonalizedGameData::new(&data, &claims_cl.sub).await),
+                    Err(e) => {
+                        eprintln!("Error receiving broadcast: {:?}", e);
+                        None
+                    }
+                }
             }
         });
 
-        // Return the receiver stream
-        Ok(ReceiverStream::new(rx))
+        Ok(stream)
     }
 
-    // This function handles the subscription logic to keep the original method clean
-    async fn handle_lobby_subscription(
-        redis_client: Arc<redis::Client>,
-        lobby_id: String,
-        tx: mpsc::Sender<LobbyCommand>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut pubsub_conn = redis_client.get_async_pubsub().await?;
-        pubsub_conn.subscribe(&lobby_id).await?;
+    /// Notifies the lobby of an update.
+    pub async fn notify_lobby(&self, lobby_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+        // Look up the lobby.
+        let lobby_arc = {
+            let lobbies = self.lobbies.lock().await;
+            lobbies.get(lobby_id).ok_or("Lobby not found")?.clone()
+        };
 
-        let mut pubsub_stream = pubsub_conn.on_message();
-        while let Some(message) = pubsub_stream.next().await {
-            let payload: String = message.get_payload()?;
-            if let Ok(game) = serde_json::from_str::<LobbyCommand>(&payload) {
-                if tx.send(game).await.is_err() {
-                    eprintln!("Receiver dropped");
-                    break;
-                }
-            }
-        }
+        // Lock the lobby to extract both data and the broadcast sender.
+        let (lobby_data, pub_tx) = {
+            let lobby = lobby_arc.lock().await;
+            (
+                lobby.data.clone(),
+                lobby.pub_tx.clone().ok_or("PubSub not initialized")?,
+            )
+        };
+
+        // Send the updated data.
+        pub_tx.send(lobby_data)?;
         Ok(())
     }
 
@@ -194,59 +203,29 @@ impl LobbyManager {
         Some(())
     }
 
-    pub async fn send_command(
-        &self,
-        lobby_id: &str,
-        command: LobbyCommand,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        // Step 1: Get the Redis connection
-        let mut redis_conn = self.redis_client.get_multiplexed_async_connection().await?;
+    // pub async fn notify_lobby(&self, lobby_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+    //     // Look up the lobby.
+    //     let lobby_arc = {
+    //         let lobbies = self.lobbies.lock().await;
+    //         lobbies.get(lobby_id).ok_or("Lobby not found")?.clone()
+    //     };
 
-        let lobby_data = serde_json::to_string(&command)?;
-        // Step 5: Publish the data to Redis.
-        redis_conn.publish(lobby_id, lobby_data).await?;
+    //     // Lock the lobby once to extract both the current data and the broadcast sender.
+    //     let (lobby_data, pub_tx) = {
+    //         let lobby = lobby_arc.lock().await;
+    //         (
+    //             lobby.data.clone(),
+    //             lobby.pub_tx.clone().ok_or("PubSub not initialized")?,
+    //         )
+    //     };
 
-        Ok(())
-    }
+    //     // Send the updated data.
+    //     pub_tx.send(lobby_data)?;
+    //     Ok(())
+    // }
 
-    pub async fn notify_lobby(&self, lobby_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // self.update_game_state(lobby_id).await;
-
-        // Step 1: Get the Redis connection
-        let mut redis_conn = self.redis_client.get_multiplexed_async_connection().await?;
-
-        // Step 2: Lock `lobbies` and extract the `lobby` reference.
-        let lobby = {
-            let lobbies = self.lobbies.lock().await;
-            let lobby = lobbies.get(lobby_id).ok_or("Lobby not found")?.clone();
-            lobby // release lobbies lock here
-        };
-
-        // Step 3: Now lock the `lobby` with a timeout to detect potential deadlock.
-        let data = LobbyCommand::Updated({
-            let lobby = match timeout(Duration::from_secs(5), lobby.lock()).await {
-                Ok(lock) => lock.data.clone(),
-                Err(_) => {
-                    eprintln!("Timeout trying to acquire lobby lock");
-                    return Err("Timeout while locking lobby".into());
-                }
-            };
-            lobby
-        });
-
-        // Step 4: Serialize the lobby data.
-        let lobby_data = serde_json::to_string(&data)?;
-
-        // Step 5: Publish the data to Redis.
-        redis_conn.publish(lobby_id, lobby_data).await?;
-
-        Ok(())
-    }
-
-    pub async fn new(redis_url: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let client = redis::Client::open(redis_url)?;
+    pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {
-            redis_client: Arc::new(client),
             lobbies: Arc::new(Mutex::new(HashMap::new())),
         })
     }

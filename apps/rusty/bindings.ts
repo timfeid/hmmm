@@ -6,40 +6,43 @@ export type Procedures = {
     mutations: 
         { key: "authentication.login", input: LoginArgs, result: AuthResponse } | 
         { key: "authentication.refresh_token", input: string, result: AuthResponse } | 
+        { key: "lobby.action", input: LobbyActionArgs, result: null } | 
         { key: "lobby.create", input: string[], result: LobbyData } | 
         { key: "lobby.input", input: LobbyInputArgs, result: null } | 
         { key: "lobby.join", input: string, result: null } | 
         { key: "lobby.ready", input: string, result: null },
     subscriptions: 
-        { key: "lobby.subscribe", input: [string, string], result: LobbyCommand }
+        { key: "lobby.subscribe", input: [string, string], result: PersonalizedGameData }
 };
-
-export type AuthResponse = { access_token: string | null; refresh_token: string | null; success: boolean }
-
-export type LoginArgs = { username: string; password: string }
-
-export type LobbyTurnMessage = { messages: string[] }
 
 export type CarDetails = { skin: CarSkin; speed: number; max_passengers: number; passenger_user_ids: string[]; rotation_speed: number; driver_user_id: string | null }
 
-export type PersonSkin = "Default"
+export type PersonDetails = { user_id: string; skin: PersonSkin }
+
+export type ActionTrigger = { trigger_type: ActionTriggerType }
+
+export type PersonalizedGameData = { visible_objects: { [key: string]: GameObject } }
+
+export type AuthResponse = { access_token: string | null; refresh_token: string | null; success: boolean }
 
 export type Coordinates = { x: number; y: number }
 
-export type GameObjectInfo = { Person: PersonDetails } | { Car: CarDetails }
-
-export type GameObject = { id: string; x: number; y: number; rotation: number; velocity: Coordinates; owner_user_id: string; info: GameObjectInfo; hidden: boolean; animation: string | null }
-
-export type LobbyInputArgs = { access_token: string; lobby_id: string; object_id: string; rotation: number; x: number; y: number; hidden: boolean; animation: string | null }
-
-export type LobbyChat = { user_id: string; message: string }
-
-export type GameState = { visible_objects: { [key: string]: GameObject } }
+export type LoginArgs = { username: string; password: string }
 
 export type CarSkin = "Sedan" | "Police"
 
-export type LobbyData = { join_code: string; chat: LobbyChat[]; game_state: GameState }
+export type GameObject = { id: string; x: number; y: number; rotation: number; velocity: Coordinates; owner_user_id: string; controller_user_id: string | null; info: GameObjectInfo; hidden: boolean; animation: string | null; action: ActionTrigger | null }
 
-export type LobbyCommand = { Updated: LobbyData } | { Messages: string[] } | { DebugMessage: string } | { TurnMessages: LobbyTurnMessage }
+export type LobbyData = { join_code: string; chat: LobbyChat[] }
 
-export type PersonDetails = { user_id: string; skin: PersonSkin }
+export type LobbyActionArgs = { access_token: string; lobby_id: string; action_id: string }
+
+export type GameObjectInfo = { Person: PersonDetails } | { Car: CarDetails }
+
+export type PersonSkin = "Default"
+
+export type LobbyChat = { user_id: string; message: string }
+
+export type ActionTriggerType = { ActionKeyPressed: number }
+
+export type LobbyInputArgs = { access_token: string; lobby_id: string; object_id: string; rotation: number; x: number; y: number; hidden: boolean; animation: string | null }

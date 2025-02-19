@@ -13,7 +13,7 @@ use crate::{
     models::user::User,
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
     pub sub: String,
     pub jti: Option<String>,

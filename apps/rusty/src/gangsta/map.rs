@@ -1,11 +1,79 @@
 use std::{
     cmp::Reverse,
     collections::{BinaryHeap, HashMap},
+    error::Error,
+    fs::read_to_string,
 };
+
+use serde::{Deserialize, Serialize};
+use specta::Type;
 
 use super::vehicle::Vehicle;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct MapConfig {
+    pub compressionlevel: i32,
+    pub height: usize,
+    pub infinite: bool,
+    pub layers: Vec<Layer>,
+    pub nextlayerid: usize,
+    pub nextobjectid: usize,
+    pub orientation: String,
+    pub renderorder: String,
+    pub tiledversion: String,
+    pub tileheight: usize,
+    pub tilesets: Vec<Tileset>,
+    pub tilewidth: usize,
+    pub r#type: String,
+    pub version: String,
+    pub width: usize,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+pub struct Layer {
+    pub chunks: Vec<Chunk>,
+    pub height: usize,
+    pub id: usize,
+    pub name: String,
+    pub opacity: i32,
+    pub startx: i32,
+    pub starty: i32,
+    pub r#type: String,
+    pub visible: bool,
+    pub width: usize,
+    pub x: i32,
+    pub y: i32,
+    pub offsetx: Option<f64>,
+    pub offsety: Option<f64>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Chunk {
+    pub data: Vec<i32>,
+    pub height: usize,
+    pub width: usize,
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct Tileset {
+    pub columns: usize,
+    pub firstgid: usize,
+    pub image: String,
+    pub imageheight: usize,
+    pub imagewidth: usize,
+    pub margin: usize,
+    pub name: String,
+    pub spacing: usize,
+    pub tilecount: usize,
+    pub tileheight: usize,
+    pub tilewidth: usize,
+}
+
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub enum TileType {
     Empty,
     Road(RoadType),
@@ -39,7 +107,7 @@ pub struct Road {
     pub road_type: RoadType,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Map {
     width: usize,
     height: usize,
@@ -47,6 +115,60 @@ pub struct Map {
 }
 
 impl Map {
+    pub fn from_json(str: &str) -> Result<Map, Box<dyn std::error::Error>> {
+        let tiled_map: MapConfig = serde_json::from_str(str)?;
+        let road_layer = tiled_map
+            .layers
+            .into_iter()
+            .find(|layer| layer.name.to_lowercase() == "road")
+            .ok_or("No 'road' layer found in the map")?;
+        let mut min_x: isize = isize::MAX;
+        let mut min_y: isize = isize::MAX;
+        let mut max_x: isize = isize::MIN;
+        let mut max_y: isize = isize::MIN;
+        for chunk in &road_layer.chunks {
+            let cx = chunk.x as isize;
+            let cy = chunk.y as isize;
+            if cx < min_x {
+                min_x = cx;
+            }
+            if cy < min_y {
+                min_y = cy;
+            }
+            let chunk_max_x = cx + chunk.width as isize;
+            let chunk_max_y = cy + chunk.height as isize;
+            if chunk_max_x > max_x {
+                max_x = chunk_max_x;
+            }
+            if chunk_max_y > max_y {
+                max_y = chunk_max_y;
+            }
+        }
+        let grid_width = (max_x - min_x) as usize;
+        let grid_height = (max_y - min_y) as usize;
+        let mut grid: Vec<Vec<Tile>> =
+            vec![vec![Tile::new(TileType::Empty); grid_width]; grid_height];
+        for chunk in &road_layer.chunks {
+            for (index, &tile_id) in chunk.data.iter().enumerate() {
+                let x = chunk.x as isize + (index % chunk.width) as isize;
+                let y = chunk.y as isize + (index / chunk.width) as isize;
+                let grid_x = (x - min_x) as usize;
+                let grid_y = (y - min_y) as usize;
+                let tile = if tile_id == 0 {
+                    Tile::new(TileType::Empty)
+                } else {
+                    Tile::new(TileType::Road(RoadType::Local))
+                };
+                grid[grid_y][grid_x] = tile;
+            }
+        }
+        Ok(Map {
+            width: grid_width,
+            height: grid_height,
+            grid,
+        })
+    }
+
     pub fn new(width: usize, height: usize) -> Self {
         let grid = vec![vec![Tile::new(TileType::Empty); width]; height];
         let mut map = Map {
@@ -133,12 +255,15 @@ impl Map {
                 }
 
                 let neighbor = Position {
-                    x: nx as usize,
-                    y: ny as usize,
+                    x: nx as i32,
+                    y: ny as i32,
                 };
 
                 // Only traverse if the neighbor is a Road tile.
-                match self.grid[neighbor.y][neighbor.x].tile_type {
+                if neighbor.y > 0 || neighbor.x > 0 {
+                    continue;
+                }
+                match self.grid[neighbor.y as usize][neighbor.x as usize].tile_type {
                     TileType::Road(_) => { /* valid */ }
                     _ => continue,
                 }
@@ -222,6 +347,26 @@ impl Map {
 
 #[derive(PartialOrd, Ord, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Position {
-    pub x: usize,
-    pub y: usize,
+    pub x: i32,
+    pub y: i32,
+}
+
+mod test {
+    use crate::gangsta::vehicle::Vehicle;
+
+    use super::Map;
+
+    // #[tokio::test]
+    #[test]
+    fn test() {
+        let vehicle = Vehicle::new(
+            0,
+            super::Position { x: 2, y: 2 },
+            super::Position { x: 55, y: 55 },
+            crate::gangsta::vehicle::VehicleBehavior::Aggressive,
+        );
+        let map =
+            Map::from_json(include_str!("maps/suburb.json")).expect("unable to read json map?");
+        map.display(&vehicle);
+    }
 }

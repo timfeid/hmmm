@@ -13,15 +13,15 @@
             "scaleInDock": 4.2548
         },
         "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/map.json": {
-            "scale": 1.7618,
-            "selectedLayer": 0,
+            "scale": 1.0161,
+            "selectedLayer": 1,
             "viewCenter": {
-                "x": 205.7554773527075,
-                "y": 103.30343966398004
+                "x": 230.78437161696684,
+                "y": 400.55112685759275
             }
         },
         "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/map.json#0x72-industrial-tileset-32px-extruded": {
-            "scaleInDock": 4.2548
+            "scaleInDock": 5.1701
         },
         "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/person/person-idle.json": {
             "scaleInDock": 1,
@@ -36,11 +36,11 @@
             }
         },
         "test.tmx": {
-            "scale": 0.5552,
+            "scale": 1.2503,
             "selectedLayer": 1,
             "viewCenter": {
-                "x": 537.6440922190202,
-                "y": 145.89337175792502
+                "x": 439.4945213148844,
+                "y": 283.93185635447503
             }
         },
         "tiles.tsx": {

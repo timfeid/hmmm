@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import type { InputState, Actionable } from "./actionable";
 import type { Controllable } from "./controllable";
+import type { GameObject } from "@gangsta/rusty";
 
 export class PlayerController extends EventTarget {
   private controlledEntity: Controllable;
@@ -19,26 +20,27 @@ export class PlayerController extends EventTarget {
     this.setControlledEntity(this.mainEntity);
   }
 
-  action(actionables: Actionable[]) {
+  action(actionables: GameObject[]) {
     const entitySprite = this.controlledEntity.sprite;
     const cx = entitySprite.x;
     const cy = entitySprite.y;
-    const threshold = 32;
 
     for (const obj of actionables) {
-      if (obj.isActionable(this.userId)) {
+      if (obj.action) {
+        const threshold = obj.action.trigger_type.ActionKeyPressed;
         const dist = Phaser.Math.Distance.Between(
           cx,
           cy,
-          obj.sprite.x,
-          obj.sprite.y
+          entitySprite.x,
+          entitySprite.y
         );
         if (dist <= threshold) {
-          obj.action(this);
-          break;
+          return obj;
         }
       }
     }
+
+    return undefined;
   }
 
   getSprite(): Phaser.GameObjects.GameObject {

@@ -13,6 +13,7 @@ use tokio_stream::wrappers::ReceiverStream;
 
 use crate::error::AppError;
 use crate::http::context::Ctx;
+use crate::http::controllers::lobby::LobbyActionArgs;
 use crate::http::controllers::lobby::LobbyInputArgs;
 use crate::services::jwt::JwtService;
 use crate::{http::controllers::lobby::LobbyController, lobby::lobby::LobbyData};
@@ -27,6 +28,9 @@ pub fn create_lobby_router() -> rspc::RouterBuilder<Ctx> {
         })
         .mutation("ready", |t| {
             t(|ctx, code: String| async move { Ok(LobbyController::ready(ctx, code).await?) })
+        })
+        .mutation("action", |t| {
+            t(|ctx, args: LobbyActionArgs| async move { Ok(LobbyController::action(ctx, args).await?) })
         })
         .mutation("input", |t| {
             t(|ctx, args: LobbyInputArgs| async move { Ok(LobbyController::input(ctx, args).await?) })

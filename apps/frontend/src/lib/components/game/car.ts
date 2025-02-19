@@ -1,10 +1,11 @@
 import Phaser from "phaser";
 import type { Actionable, InputState } from "./actionable.js";
 import type { PlayerController } from "./player-controller.js";
-import type { Controllable } from "./costate.infodriveable.js";
+// import type { Controllable } from "./costate.infodriveable.js";
 import type { ServerUpdatable } from "./updatable.js";
 import type { CarObject } from "./utils.js";
 import { user } from "../../stores/access-token.svelte.js";
+import type { Controllable } from "./controllable.js";
 
 export class Car implements Controllable, ServerUpdatable {
   id: string;
@@ -49,8 +50,12 @@ export class Car implements Controllable, ServerUpdatable {
   }
 
   action(playerController: PlayerController) {
-    // playerController.removeControl();
+    // playerController.getControlledEntity().removeControl();
     // this.sprite.addToDisplayList();
+    if (!this.state.action) {
+      return;
+    }
+
     if (playerController.getControlledEntity() != this) {
       // this.scene
       playerController.setControlledEntity(this);
@@ -98,6 +103,7 @@ export class Car implements Controllable, ServerUpdatable {
     this.scene.cameras.main.setDeadzone(100, 100);
 
     if (this.state.info.Car.driver_user_id !== user.user?.sub) {
+      console.log("not the driver, sit back n relax");
       return;
     }
     const dt = delta / 1000;
@@ -174,8 +180,12 @@ export class Car implements Controllable, ServerUpdatable {
     }
     this.speed = this.state.info.Car.speed;
     this.rotationSpeed = this.state.info.Car.rotation_speed;
+    // console.log("skin", this.state.info.Car.skin);
     this.sprite.setTexture(this.state.info.Car.skin);
     // this.sprite.anims.play(skin)
+    if (this.state.info.Car.driver_user_id === user.user?.sub) {
+      return;
+    }
 
     const elapsed = time - this.lastServerUpdateTime;
     const currentX = this.sprite.x;
@@ -196,7 +206,7 @@ export class Car implements Controllable, ServerUpdatable {
     );
 
     if (
-      this.state.info.driver_user_id !== user.user?.sub &&
+      this.state.info.Car.driver_user_id !== user.user?.sub &&
       this.state.animation &&
       this.sprite.anims.currentAnim?.key !== this.state.animation
     ) {

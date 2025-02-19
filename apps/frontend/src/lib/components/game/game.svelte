@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { LobbyCommand, LobbyData, VisibleObject } from "@gangsta/rusty";
+  import type { GameObject, PersonalizedGameData } from "@gangsta/rusty";
   import Phaser from "phaser";
   import { onMount } from "svelte";
   import { client, websocketClient } from "../../client";
@@ -13,6 +13,7 @@
   import type { ServerUpdatable } from "./updatable";
   import type { Controllable } from "./controllable";
   import { isCar, isPerson, type CarObject, type PersonObject } from "./utils";
+  import type { Actionable } from "./actionable";
 
   const userId = $derived(user.user?.sub || "");
 
@@ -24,7 +25,7 @@
 
     private controller?: PlayerController;
     private action!: Phaser.Input.Keyboard.Key;
-    private actionables: Array<any> = [];
+    private actionables: Array<Actionable> = [];
     private tileSize: number = 16;
     private tilePosText!: Phaser.GameObjects.Text;
 
@@ -218,8 +219,7 @@
         this.controller.addEventListener(
           "updated",
           (e: CustomEvent<{ entity: Controllable }>) => {
-            console.log("hi..?", e);
-            this.updateServer(e.detail.entity, false);
+            // this.updateServer(e.detail.entity, false);
           }
         );
       }
@@ -234,7 +234,7 @@
       return car;
     }
 
-    createObject(object: VisibleObject) {
+    createObject(object: GameObject) {
       if (isCar(object)) {
         return this.createCar(object);
       }
@@ -243,7 +243,8 @@
         return this.createPerson(object);
       }
 
-      throw new Error("Unknown object" + object.type);
+      console.error(object);
+      throw new Error("Unknown object" + object.id);
     }
 
     updateDebugBox() {
@@ -259,7 +260,7 @@
 
     updateObjects(time: number, delta: number) {
       for (const [objectId, object] of Object.entries(
-        lobby?.game_state.visible_objects || {}
+        lobby?.visible_objects || {}
       )) {
         if (!this.objects.has(objectId)) {
           try {
@@ -270,7 +271,7 @@
           }
         }
 
-        if (object.owner_id !== user.user!.sub) {
+        if (object.controller_user_id !== user.user!.sub) {
           this.objects
             .get(objectId)!
             .updateInputFromServer(object, time, delta);
@@ -282,7 +283,6 @@
     }
 
     async performUpdate(inputState: any) {
-      // console.log("updateserver called", inputState);
       await websocketClient.mutation(["lobby.input", inputState]);
     }
 
@@ -306,10 +306,10 @@
 
       const inputState = this.getInputState(entity);
       if (throttle) {
-        this.throttledUpdate(inputState, 150);
-      } else {
-        this.performUpdate(inputState);
+        return this.throttledUpdate(inputState, 150);
       }
+
+      return this.performUpdate(inputState);
       // console.log("bob?");
     }
 
@@ -323,30 +323,58 @@
       }
       this.controller.update(this.cursors, delta);
       if (Phaser.Input.Keyboard.JustDown(this.action)) {
-        this.controller.action(this.actionables);
+        this.performAction();
       }
       this.updateServer(this.controller.getControlledEntity());
     }
-  }
 
-  function isUpdated(data: LobbyCommand): data is { Updated: LobbyData } {
-    return "Updated" in data;
-  }
-
-  function updated(data: LobbyData) {
-    // console.log(data.game_state.visible_users);
-    lobby = data;
-  }
-
-  function onData(data: LobbyCommand) {
-    if (isUpdated(data)) {
-      return updated(data.Updated);
+    async executeAction(actionId: string) {
+      // console.log("updateserver called", inputState);
+      return await websocketClient.mutation([
+        "lobby.action",
+        {
+          lobby_id: gameId,
+          access_token: user.accessToken!,
+          action_id: actionId,
+        },
+      ]);
     }
+
+    async performAction() {
+      if (!this.controller || !lobby) {
+        console.log("oh no controller");
+        return;
+      }
+
+      const action = this.controller.action(
+        Object.values(lobby.visible_objects)
+      );
+      if (action) {
+        try {
+          const response = await this.executeAction(action.id);
+          await this.updateServer(this.controller.getControlledEntity(), false);
+
+          this.actionables
+            .find((a) => a.id === action.id)
+            ?.action(this.controller);
+
+          return response;
+        } catch (e) {
+          toast.error((e as Error).message);
+          return false;
+        }
+      }
+    }
+  }
+
+  function onData(data: PersonalizedGameData) {
+    // console.log(data.visible_objects);
+    lobby = data;
   }
 
   let { gameId } = $props();
 
-  let lobby = $state<undefined | LobbyData>();
+  let lobby = $state<undefined | PersonalizedGameData>();
   let game: Phaser.Game | undefined = $state();
   onMount(() => {
     let unsubscribe: (() => void) | undefined;

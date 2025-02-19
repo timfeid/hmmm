@@ -10,15 +10,18 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 use tokio::sync::Mutex;
 
+use super::{Game, GameState};
+
 #[async_trait::async_trait]
 pub trait Action: Send + Sync + Debug + 'static {
     async fn apply(
         &self,
+        game: Arc<Mutex<GameState>>,
         // game: Arc<Mutex<Game>>,
         // card: Arc<Mutex<Card>>,
         // owner: Arc<Mutex<Player>>,
         // target: Option<FrontendTarget>,
-        // ability_id: Option<String>,
+        ability_id: String,
         user_id: String,
     ) -> Result<(), String>;
     fn as_any(&self) -> &dyn Any;
@@ -40,12 +43,17 @@ pub enum ActionTriggerType {
     ActionKeyPressed(u8),
 }
 
-#[derive(Type, Serialize, Clone)]
+// This function will be used to provide a default value for the field.
+fn default_action() -> Arc<dyn Action + Send + Sync> {
+    Arc::new(BlankAction {})
+}
+
+#[derive(Type, Deserialize, Serialize, Clone)]
 pub struct ActionTrigger {
     // pub id: String,
     pub trigger_type: ActionTriggerType,
 
-    #[serde(skip_serializing, skip_deserializing)]
+    #[serde(skip, default = "default_action")]
     pub action: Arc<dyn Action + Send + Sync>,
     // pub requirements: Arc<
     //     dyn Fn(
@@ -57,6 +65,25 @@ pub struct ActionTrigger {
     //         + Send
     //         + Sync,
     // >,
+}
+
+#[derive(Type, Serialize, Clone, Debug)]
+pub struct BlankAction {}
+
+#[async_trait::async_trait]
+impl Action for BlankAction {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    async fn apply(
+        &self,
+        game: Arc<Mutex<GameState>>,
+        object_id: String,
+        user_id: String,
+    ) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 impl Debug for ActionTrigger {
@@ -110,7 +137,13 @@ pub struct ActionBuilder {
 
 pub struct AsyncClosureAction {
     closure: Arc<
-        dyn Fn(String) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync,
+        dyn Fn(
+                Arc<Mutex<GameState>>,
+                String,
+                String,
+            ) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
+            + Send
+            + Sync,
     >,
 }
 #[async_trait::async_trait]
@@ -119,8 +152,13 @@ impl Action for AsyncClosureAction {
         self
     }
 
-    async fn apply(&self, user_id: String) -> Result<(), String> {
-        let response = (self.closure)(user_id).await;
+    async fn apply(
+        &self,
+        game: Arc<Mutex<GameState>>,
+        object_id: String,
+        user_id: String,
+    ) -> Result<(), String> {
+        let response = (self.closure)(game, object_id, user_id).await;
         return response;
     }
 }
@@ -133,7 +171,11 @@ impl Debug for AsyncClosureAction {
 impl AsyncClosureAction {
     pub fn new<F>(closure: F) -> Self
     where
-        F: Fn(String) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
+        F: Fn(
+                Arc<Mutex<GameState>>,
+                String,
+                String,
+            ) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
             + Send
             + Sync
             + 'static,
@@ -156,7 +198,8 @@ impl ActionBuilder {
     pub fn closure_action<F>(mut self, action: F) -> Self
     where
         F: Fn(
-                // Arc<Mutex<Game>>,
+                Arc<Mutex<GameState>>,
+                String,
                 // Arc<Mutex<Card>>,
                 // Arc<Mutex<Player>>,
                 // Option<FrontendTarget>,

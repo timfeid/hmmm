@@ -1,4 +1,7 @@
-use std::{borrow::BorrowMut, collections::HashMap, sync::Arc, thread::Thread, vec};
+use std::{
+    borrow::BorrowMut, collections::HashMap, future::Future, pin::Pin, sync::Arc, thread::Thread,
+    vec,
+};
 
 use futures::StreamExt;
 
@@ -17,18 +20,19 @@ impl LobbyChat {
 pub struct LobbyData {
     pub join_code: String,
     pub chat: Vec<LobbyChat>,
-    pub game_state: GameState,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    pub game: Game,
 }
 impl Default for LobbyData {
     fn default() -> LobbyData {
-        let mut game_state = GameState::default();
         let code = ulid::Ulid::new().to_string();
         // game_state.code = code.clone();
 
         LobbyData {
             join_code: code,
             chat: vec![],
-            game_state: game_state,
+            game: Game::default(),
         }
     }
 }
@@ -36,23 +40,25 @@ impl Default for LobbyData {
 #[derive(Type, Deserialize, Serialize, Debug)]
 pub struct Lobby {
     #[serde(skip_serializing, skip_deserializing)]
-    client: Option<Client>,
+    pub pub_tx: Option<broadcast::Sender<LobbyData>>,
 
     pub data: LobbyData,
 }
 
 impl Lobby {}
 
-use redis::Client;
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{broadcast, mpsc, Mutex, RwLock};
 use tokio_stream::wrappers::ReceiverStream;
 use ulid::Ulid;
 
 use crate::{
     error::{AppError, AppResult},
-    game::GameState,
+    gangsta::{
+        action::{ActionBuilder, ActionTriggerType},
+        CarDetails, CarSkin, Coordinates, Game, GameObject, GameObjectInfo, PersonDetails,
+    },
     http::controllers::lobby::LobbyInputArgs,
     services::jwt::Claims,
 };
@@ -61,9 +67,11 @@ use super::manager::LobbyManager;
 
 impl Lobby {
     pub async fn new(user: &Claims) -> Self {
+        let (pub_tx, _) = broadcast::channel(2048);
+
         let mut lobby = Lobby {
+            pub_tx: Some(pub_tx),
             data: LobbyData::default(),
-            client: None,
         };
 
         lobby.join(user).await;
@@ -73,25 +81,6 @@ impl Lobby {
 
     pub async fn join(&mut self, user: &Claims) -> &mut Self {
         println!("JOIN {:?}", self);
-
-        self
-    }
-
-    pub async fn input(&mut self, args: LobbyInputArgs, user_id: String) -> &mut Self {
-        if let Some(object) = self
-            .data
-            .game_state
-            .visible_objects
-            .get_mut(&args.object_id)
-        {
-            if object.owner_user_id == user_id {
-                object.rotation = args.rotation;
-                object.x = args.x;
-                object.y = args.y;
-                object.hidden = args.hidden;
-                object.animation = args.animation;
-            }
-        }
 
         self
     }
@@ -129,16 +118,6 @@ mod test {
             exp: 0,
         };
         let lobby = &Rc::new(RefCell::new(Lobby::new(&user_id).await));
-        let redis_url = "redis://127.0.0.1/".to_string();
-        let redis = redis::Client::open(redis_url).unwrap();
-
-        // async_stream::stream! {
-        //     // let mut post_stream = lobby.clone().borrow_mut().subscribe(redis);
-        //     while let Some(post) = post_stream.next().await {
-        //         println!("{:?}", post);
-        //         yield post;
-        //     }
-        // };
 
         lobby
             .clone()
