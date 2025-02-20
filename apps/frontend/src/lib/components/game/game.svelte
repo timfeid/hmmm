@@ -1,5 +1,8 @@
 <script lang="ts">
-  import type { GameObject, PersonalizedGameData } from "@gangsta/rusty";
+  import type {
+    OutgoingGameObject,
+    PersonalizedGameData,
+  } from "@gangsta/rusty";
   import Phaser from "phaser";
   import { onMount } from "svelte";
   import { client, websocketClient } from "../../client";
@@ -27,7 +30,7 @@
     private action!: Phaser.Input.Keyboard.Key;
     private actionables: Array<Actionable> = [];
     private tileSize: number = 16;
-    private tilePosText!: Phaser.GameObjects.Text;
+    private tilePosText!: Phaser.OutgoingGameObjects.Text;
 
     personGroup!: Phaser.Physics.Arcade.Group;
 
@@ -214,7 +217,7 @@
       const person = new Person(object, this);
       this.actionables.push(person);
 
-      if (object.info.Person.user_id === userId) {
+      if (object.details.Person.user_id === userId) {
         this.controller = new PlayerController(user.user!.sub, person);
         this.controller.addEventListener(
           "updated",
@@ -234,7 +237,7 @@
       return car;
     }
 
-    createObject(object: GameObject) {
+    createObject(object: OutgoingGameObject) {
       if (isCar(object)) {
         return this.createCar(object);
       }
@@ -244,7 +247,7 @@
       }
 
       console.error(object);
-      throw new Error("Unknown object" + object.id);
+      throw new Error("Unknown object" + object);
     }
 
     updateDebugBox() {
@@ -271,11 +274,9 @@
           }
         }
 
-        if (object.controller_user_id !== user.user!.sub) {
-          this.objects
-            .get(objectId)!
-            .updateInputFromServer(object, time, delta);
-        }
+        // if (object.controller_user_id !== user.user!.sub) {
+        this.objects.get(objectId)!.updateInputFromServer(object, time, delta);
+        // }
         // this.cars.get(userId)!.updateInput({
         //   u
         // }, 0);

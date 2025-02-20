@@ -1,7 +1,7 @@
 use std::{thread::sleep, time::Duration};
 
 use rusty::gangsta::{
-    map::{Map, Position, Road},
+    map::{Coordinates, Map, Road},
     traffic_light::{TrafficLight, TrafficLightState},
     vehicle::{Vehicle, VehicleBehavior},
 };
@@ -9,8 +9,8 @@ use rusty::gangsta::{
 fn main() {
     let mut map = Map::new(50, 30);
 
-    let start = Position { x: 0, y: 0 };
-    let destination = Position { x: 42, y: 22 };
+    let start = Coordinates { x: 0, y: 0 };
+    let destination = Coordinates { x: 42, y: 22 };
 
     let mut vehicle = Vehicle::new(1, start, destination, VehicleBehavior::Normal);
     if let Some(path) = map.find_path(start, destination) {

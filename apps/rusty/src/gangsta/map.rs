@@ -101,8 +101,8 @@ pub enum RoadType {
 
 #[derive(Debug)]
 pub struct Road {
-    pub start: Position,
-    pub end: Position,
+    pub start: Coordinates,
+    pub end: Coordinates,
     pub cost: i32,
     pub road_type: RoadType,
 }
@@ -223,9 +223,9 @@ impl Map {
         }
     }
 
-    pub fn find_path(&self, start: Position, goal: Position) -> Option<Vec<Position>> {
-        let mut dist: HashMap<Position, i32> = HashMap::new();
-        let mut prev: HashMap<Position, Position> = HashMap::new();
+    pub fn find_path(&self, start: Coordinates, goal: Coordinates) -> Option<Vec<Coordinates>> {
+        let mut dist: HashMap<Coordinates, i32> = HashMap::new();
+        let mut prev: HashMap<Coordinates, Coordinates> = HashMap::new();
         let mut heap = BinaryHeap::new();
 
         dist.insert(start, 0);
@@ -254,7 +254,7 @@ impl Map {
                     continue;
                 }
 
-                let neighbor = Position {
+                let neighbor = Coordinates {
                     x: nx as i32,
                     y: ny as i32,
                 };
@@ -345,8 +345,10 @@ impl Map {
     }
 }
 
-#[derive(PartialOrd, Ord, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Position {
+#[derive(
+    Type, Serialize, Deserialize, PartialOrd, Ord, Debug, Clone, Copy, PartialEq, Eq, Hash,
+)]
+pub struct Coordinates {
     pub x: i32,
     pub y: i32,
 }
@@ -361,8 +363,8 @@ mod test {
     fn test() {
         let vehicle = Vehicle::new(
             0,
-            super::Position { x: 2, y: 2 },
-            super::Position { x: 55, y: 55 },
+            super::Coordinates { x: 2, y: 2 },
+            super::Coordinates { x: 55, y: 55 },
             crate::gangsta::vehicle::VehicleBehavior::Aggressive,
         );
         let map =

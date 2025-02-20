@@ -25,7 +25,7 @@ export class Person implements Controllable, ServerUpdatable {
     const sprite = this.scene.physics.add.sprite(
       state.x,
       state.y,
-      state.info.Person.skin
+      state.details.Person.skin
     );
     console.log(state);
     // sprite.setDisplaySize(this.sprite.width, sprite.displayHeight); sprite.body.setSize(this.sprite.width, sprite.height);
@@ -33,10 +33,14 @@ export class Person implements Controllable, ServerUpdatable {
     sprite.setCollideWorldBounds(true);
     scene.personGroup.add(sprite);
     this.sprite = sprite;
-    console.log("added.");
+    console.log("added.", state.details.Person.skin);
+    this.sprite.anims.play("idle");
   }
 
   updateInputFromServer(state: PersonObject, time: number, delta: number) {
+    if (state.details.Person.user_id === user.user?.sub) {
+      return;
+    }
     this.state = state;
     this.update(time, delta);
     this.lastServerUpdateTime = time;
@@ -64,15 +68,16 @@ export class Person implements Controllable, ServerUpdatable {
       targetRotation,
       this.rotationSpeed * (delta / 1000)
     );
-    this.sprite.setVisible(!this.state.hidden);
+    this.sprite.anims.play("idle");
+    // this.sprite.setVisible(!this.state.hidden);
 
-    if (
-      this.state.info.Person.user_id !== user.user?.sub &&
-      this.state.animation &&
-      this.sprite.anims.currentAnim?.key !== this.state.animation
-    ) {
-      this.sprite.anims.play(this.state.animation);
-    }
+    // if (
+    //   this.state.details.Person.user_id !== user.user?.sub &&
+    //   this.state.animation &&
+    //   this.sprite.anims.currentAnim?.key !== this.state.animation
+    // ) {
+    //   this.sprite.anims.play(this.state.animation);
+    // }
   }
 
   getSprite(): Phaser.Physics.Arcade.Sprite {
@@ -127,16 +132,16 @@ export class Person implements Controllable, ServerUpdatable {
         this.sprite.anims.play("idle");
       }
     }
-    this.sprite.body.setVelocity(vx, vy);
+    if (this.sprite.body && "setVelocity" in this.sprite.body) {
+      this.sprite.body.setVelocity(vx, vy);
+    }
   }
 
   getInputState(): InputState {
     return {
-      rotation: Math.round(this.sprite.rotation * 1000) / 1000,
+      r: Math.round(this.sprite.rotation * 1000) / 1000,
       x: Math.round(this.sprite.x),
       y: Math.round(this.sprite.y),
-      hidden: !this.sprite.visible,
-      animation: this.sprite.anims.currentAnim?.key,
     };
   }
 }

@@ -14,7 +14,7 @@ use tokio_stream::StreamExt;
 
 use crate::{
     error::{AppError, AppResult},
-    gangsta::GameObject,
+    gangsta::{map::Coordinates, Car, GameObjectType, OutgoingGameObject, PlayerInput},
     http::context::Ctx,
     lobby::{
         lobby::{Lobby, LobbyChat, LobbyData},
@@ -25,27 +25,29 @@ use crate::{
 
 #[derive(Type, Serialize, Deserialize, Debug)]
 pub struct PersonalizedGameData {
-    visible_objects: HashMap<String, GameObject>,
+    visible_objects: HashMap<String, OutgoingGameObject>,
 }
 
 impl PersonalizedGameData {
     pub async fn new(command: &LobbyData, user_id: &str) -> PersonalizedGameData {
-        // if let LobbyCommand::Updated(lobby_data) = command {
-        //     for (id, player_state) in &mut lobby_data.game_state.players {
-        //         if id != user_id {
-        //             player_state.hand.clear();
-        //         }
-        //     }
-        // }
-        PersonalizedGameData {
-            visible_objects: command
-                .game
-                .get_state()
-                .lock()
-                .await
-                .clone()
-                .visible_objects,
-        }
+        let visible_objects = {
+            let mut visible_objects = HashMap::new();
+            let game = command.game.get_state().lock().await;
+            for (object_id, obj) in game.players.iter() {
+                visible_objects.insert(object_id.clone(), obj.to_outgoing_game_object());
+            }
+            for (object_id, obj) in game.objects.iter() {
+                match &obj.details {
+                    GameObjectType::Car(car) => {
+                        visible_objects.insert(object_id.clone(), car.to_outgoing_game_object());
+                    }
+                }
+            }
+
+            visible_objects
+        };
+
+        PersonalizedGameData { visible_objects }
     }
 }
 
@@ -62,12 +64,9 @@ pub struct LobbyActionArgs {
 pub struct LobbyInputArgs {
     access_token: String,
     lobby_id: String,
-    pub object_id: String,
-    pub rotation: f32,
+    pub r: f32,
     pub x: i32,
     pub y: i32,
-    pub hidden: bool,
-    pub animation: Option<String>,
 }
 
 impl LobbyController {
@@ -134,12 +133,11 @@ impl LobbyController {
             .game
             .input(
                 user_claims.sub,
-                args.object_id,
-                args.rotation,
-                args.x,
-                args.y,
-                args.hidden,
-                args.animation,
+                PlayerInput {
+                    rotation: args.r,
+                    x: args.x,
+                    y: args.y,
+                },
             )
             .await;
 

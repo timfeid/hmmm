@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use super::map::Position;
+use super::map::Coordinates;
 
 #[derive(Debug, Clone, Copy)]
 pub enum VehicleBehavior {
@@ -12,18 +12,18 @@ pub enum VehicleBehavior {
 #[derive(Debug)]
 pub struct Vehicle {
     pub id: usize,
-    pub position: Position,
-    pub destination: Position,
+    pub position: Coordinates,
+    pub destination: Coordinates,
     speed: f32, // Units per tick
     behavior: VehicleBehavior,
-    path: VecDeque<Position>, // Route to follow
+    path: VecDeque<Coordinates>, // Route to follow
 }
 
 impl Vehicle {
     pub fn new(
         id: usize,
-        start: Position,
-        destination: Position,
+        start: Coordinates,
+        destination: Coordinates,
         behavior: VehicleBehavior,
     ) -> Self {
         Self {
@@ -46,7 +46,7 @@ impl Vehicle {
         }
     }
 
-    pub fn set_path(&mut self, path: Vec<Position>) -> &Vehicle {
+    pub fn set_path(&mut self, path: Vec<Coordinates>) -> &Vehicle {
         self.path = VecDeque::from(path);
 
         self

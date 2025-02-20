@@ -1,11 +1,9 @@
 import type { PlayerController } from "./player-controller";
 
 export type InputState = {
-  rotation: number;
+  r: number;
   x: number;
   y: number;
-  hidden: boolean;
-  animation?: string;
 };
 
 export interface Actionable {

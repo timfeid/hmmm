@@ -57,7 +57,7 @@ use crate::{
     error::{AppError, AppResult},
     gangsta::{
         action::{ActionBuilder, ActionTriggerType},
-        CarDetails, CarSkin, Coordinates, Game, GameObject, GameObjectInfo, PersonDetails,
+        CarDetails, CarSkin, Game, GameObjectInfo, PersonDetails,
     },
     http::controllers::lobby::LobbyInputArgs,
     services::jwt::Claims,

@@ -27,13 +27,13 @@ export class Car implements Controllable, ServerUpdatable {
   ) {
     this.id = state.id;
     this.roadLayer = scene.roadLayer;
-    this.speed = state.info.Car.speed;
-    this.rotationSpeed = state.info.Car.rotation_speed;
+    this.speed = state.details.Car.speed;
+    this.rotationSpeed = state.details.Car.rotation_speed;
 
     const carSprite = this.scene.physics.add.sprite(
       state.x,
       state.y,
-      state.info.Car.skin
+      state.details.Car.skin
     );
     console.log(state);
     // carSprite.setDisplaySize(26, 58);
@@ -52,7 +52,7 @@ export class Car implements Controllable, ServerUpdatable {
   action(playerController: PlayerController) {
     // playerController.getControlledEntity().removeControl();
     // this.sprite.addToDisplayList();
-    if (!this.state.action) {
+    if (!this.state.details) {
       return;
     }
 
@@ -72,7 +72,7 @@ export class Car implements Controllable, ServerUpdatable {
   }
 
   takeControl() {
-    if (!this.state.info.Car.driver_user_id) {
+    if (!this.state.details.Car.driver_user_id) {
       console.log("we need to take control");
     }
     console.log("we are here taking control");
@@ -102,7 +102,8 @@ export class Car implements Controllable, ServerUpdatable {
     this.scene.cameras.main.startFollow(this.getSprite(), true, 0.08, 0.08);
     this.scene.cameras.main.setDeadzone(100, 100);
 
-    if (this.state.info.Car.driver_user_id !== user.user?.sub) {
+    // console.log(this.state.details);
+    if (this.state.details.Car.driver_user_id !== user.user?.sub) {
       console.log("not the driver, sit back n relax");
       return;
     }
@@ -178,12 +179,12 @@ export class Car implements Controllable, ServerUpdatable {
       console.log("no state yet");
       return;
     }
-    this.speed = this.state.info.Car.speed;
-    this.rotationSpeed = this.state.info.Car.rotation_speed;
-    // console.log("skin", this.state.info.Car.skin);
-    this.sprite.setTexture(this.state.info.Car.skin);
+    this.speed = this.state.details.Car.speed;
+    this.rotationSpeed = this.state.details.Car.rotation_speed;
+    // console.log("skin", this.state.details.Car.skin);
+    this.sprite.setTexture(this.state.details.Car.skin);
     // this.sprite.anims.play(skin)
-    if (this.state.info.Car.driver_user_id === user.user?.sub) {
+    if (this.state.details.Car.driver_user_id === user.user?.sub) {
       return;
     }
 
@@ -205,22 +206,20 @@ export class Car implements Controllable, ServerUpdatable {
       this.rotationSpeed * (delta / 1000)
     );
 
-    if (
-      this.state.info.Car.driver_user_id !== user.user?.sub &&
-      this.state.animation &&
-      this.sprite.anims.currentAnim?.key !== this.state.animation
-    ) {
-      this.sprite.anims.play(this.state.animation);
-    }
+    // if (
+    //   this.state.details.Car.driver_user_id !== user.user?.sub &&
+    //   this.state.animation &&
+    //   this.sprite.anims.currentAnim?.key !== this.state.animation
+    // ) {
+    //   this.sprite.anims.play(this.state.animation);
+    // }
   }
 
   getInputState(): InputState {
     return {
-      rotation: Math.round(this.sprite.rotation * 1000) / 1000,
+      r: Math.round(this.sprite.rotation * 1000) / 1000,
       x: Math.round(this.sprite.x),
       y: Math.round(this.sprite.y),
-      hidden: !this.sprite.visible,
-      animation: this.sprite.anims.currentAnim?.key,
     };
   }
 }

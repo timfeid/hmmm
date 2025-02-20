@@ -1,7 +1,7 @@
 import Phaser from "phaser";
 import type { InputState, Actionable } from "./actionable";
 import type { Controllable } from "./controllable";
-import type { GameObject } from "@gangsta/rusty";
+import type { OutgoingGameObject } from "@gangsta/rusty";
 
 export class PlayerController extends EventTarget {
   private controlledEntity: Controllable;
@@ -20,7 +20,7 @@ export class PlayerController extends EventTarget {
     this.setControlledEntity(this.mainEntity);
   }
 
-  action(actionables: GameObject[]) {
+  action(actionables: OutgoingGameObject[]) {
     const entitySprite = this.controlledEntity.sprite;
     const cx = entitySprite.x;
     const cy = entitySprite.y;
