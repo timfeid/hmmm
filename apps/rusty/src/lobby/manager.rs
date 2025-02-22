@@ -84,41 +84,12 @@ impl LobbyManager {
 
         lobbies.insert(lobby_id.clone(), Arc::new(Mutex::new(lobby)));
 
-        // tokio::spawn(async move {
-        //     let rx = {
-        //         let game = game_arc_clone.lock().await;
-        //         game.broadcast_sender
-        //             .as_ref()
-        //             .map(|sender| sender.subscribe())
-        //     };
-
-        //     if let Some(mut rx) = rx {
-        //         while let Ok(message) = rx.recv().await {
-        //             if let Some(lobby_manager) = lobby_manager_weak.upgrade() {
-        //                 if let Some(command) = message {
-        //                     lobby_manager
-        //                         .send_command(&lobby_id_clone, command)
-        //                         .await
-        //                         .ok();
-        //                 } else {
-        //                     lobby_manager.notify_lobby(&lobby_id_clone).await.ok();
-        //                 }
-        //             } else {
-        //                 // The LobbyManager has been dropped; exit the task
-        //                 break;
-        //             }
-        //         }
-        //     }
-        // });
-
         Ok(lobby_id)
     }
 
     pub async fn get_lobby(&self, join_code: &String) -> AppResult<Arc<Mutex<Lobby>>> {
-        // Lock the `lobbies` to get the lobby reference.
         let lobbies = self.lobbies.lock().await;
 
-        // Find the specific lobby or return an error if it doesn't exist.
         let lobby = lobbies
             .get(join_code)
             .ok_or(AppError::BadRequest("Lobby not found".to_owned()))?
@@ -132,7 +103,6 @@ impl LobbyManager {
         lobby_id: String,
         claims: Claims,
     ) -> AppResult<impl tokio_stream::Stream<Item = PersonalizedGameData>> {
-        // Look up the lobby.
         let lobby_arc = {
             let lobbies = self.lobbies.lock().await;
             lobbies
@@ -141,7 +111,6 @@ impl LobbyManager {
                 .clone()
         };
 
-        // Lock the lobby briefly to extract the broadcast sender.
         let pub_tx = {
             let lobby = lobby_arc.lock().await;
             lobby.pub_tx.clone().ok_or(AppError::InternalServerError(
@@ -149,10 +118,8 @@ impl LobbyManager {
             ))?
         };
 
-        // Subscribe to the broadcast channel.
         let rx = pub_tx.subscribe();
 
-        // Wrap the broadcast receiver in a stream and map the data.
         let stream = BroadcastStream::new(rx).filter_map(move |result| {
             let claims_cl = claims.clone();
             async move {
@@ -169,15 +136,12 @@ impl LobbyManager {
         Ok(stream)
     }
 
-    /// Notifies the lobby of an update.
     pub async fn notify_lobby(&self, lobby_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // Look up the lobby.
         let lobby_arc = {
             let lobbies = self.lobbies.lock().await;
             lobbies.get(lobby_id).ok_or("Lobby not found")?.clone()
         };
 
-        // Lock the lobby to extract both data and the broadcast sender.
         let (lobby_data, pub_tx) = {
             let lobby = lobby_arc.lock().await;
             (
@@ -186,7 +150,6 @@ impl LobbyManager {
             )
         };
 
-        // Send the updated data.
         pub_tx.send(lobby_data)?;
         Ok(())
     }
@@ -197,32 +160,11 @@ impl LobbyManager {
             let lobby = hash_map.get(lobby_id)?;
             lobby.lock().await.join(user).await;
         }
-        // lobby.lock().await.message(user, args.text);
+
         self.notify_lobby(lobby_id).await.ok();
 
         Some(())
     }
-
-    // pub async fn notify_lobby(&self, lobby_id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    //     // Look up the lobby.
-    //     let lobby_arc = {
-    //         let lobbies = self.lobbies.lock().await;
-    //         lobbies.get(lobby_id).ok_or("Lobby not found")?.clone()
-    //     };
-
-    //     // Lock the lobby once to extract both the current data and the broadcast sender.
-    //     let (lobby_data, pub_tx) = {
-    //         let lobby = lobby_arc.lock().await;
-    //         (
-    //             lobby.data.clone(),
-    //             lobby.pub_tx.clone().ok_or("PubSub not initialized")?,
-    //         )
-    //     };
-
-    //     // Send the updated data.
-    //     pub_tx.send(lobby_data)?;
-    //     Ok(())
-    // }
 
     pub async fn new() -> Result<Self, Box<dyn std::error::Error>> {
         Ok(Self {

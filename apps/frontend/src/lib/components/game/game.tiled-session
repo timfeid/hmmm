@@ -12,12 +12,16 @@
         "": {
             "scaleInDock": 4.2548
         },
+        "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/idle.tsj": {
+            "scaleInDock": 1,
+            "scaleInEditor": 4.1186
+        },
         "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/map.json": {
-            "scale": 1.0161,
+            "scale": 0.6244,
             "selectedLayer": 1,
             "viewCenter": {
-                "x": 230.78437161696684,
-                "y": 400.55112685759275
+                "x": 543.7219730941704,
+                "y": 744.7149263292761
             }
         },
         "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/map.json#0x72-industrial-tileset-32px-extruded": {
@@ -31,8 +35,8 @@
             "scale": 4.28,
             "selectedLayer": 0,
             "viewCenter": {
-                "x": 183.99532710280374,
-                "y": 101.86915887850468
+                "x": 127.92056074766354,
+                "y": 128.0373831775701
             }
         },
         "test.tmx": {
@@ -44,7 +48,7 @@
             }
         },
         "tiles.tsx": {
-            "scaleInDock": 2.9521,
+            "scaleInDock": 2.0605,
             "scaleInEditor": 1.3192
         }
     },
@@ -60,15 +64,20 @@
     "map.width": 60,
     "openFiles": [
         "tiles.tsx",
-        "test.tmx"
+        "test.tmx",
+        "road.tmx",
+        "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/map.json",
+        "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/idle.tsj"
     ],
     "project": "game.tiled-project",
     "property.type": "bool",
     "recentFiles": [
-        "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/person/person-idle.json",
-        "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/map.json",
         "tiles.tsx",
-        "test.tmx"
+        "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/idle.tsj",
+        "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/map.json",
+        "road.tmx",
+        "test.tmx",
+        "/Users/timfeid/websites/scheduling/apps/frontend/static/assets/person/person-idle.json"
     ],
     "tileset.lastUsedFormat": "json",
     "tileset.spacing": 0,

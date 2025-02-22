@@ -39,7 +39,7 @@
       this.load.image("tiles", "/assets/tiles.png");
       this.load.image("Sedan", "/assets/car/car.png");
       this.load.image("Police", "/assets/car/police.png");
-      // this.load.image("person-idle", "/assets/person/idle.png");
+
       this.load.spritesheet("person-run", "/assets/person/run.png", {
         frameWidth: 16,
         frameHeight: 16,
@@ -61,28 +61,10 @@
     }
 
     setNighttime(w: number, h: number) {
-      const nightOverlay = this.add.rectangle(
-        0,
-        0,
-        w,
-        h,
-        0x000000,
-        0.6 // alpha value: 0.6 gives a dark overlay
-      );
+      const nightOverlay = this.add.rectangle(0, 0, w, h, 0x000000, 0.6);
       nightOverlay.setOrigin(0, 0);
-      // Set the overlay's depth to be on top of everything.
       nightOverlay.setDepth(10);
       nightOverlay.setPipeline("Light2D");
-
-      // Optionally, animate the overlay to simulate a day/night cycle:
-      // this.tweens.add({
-      //   targets: nightOverlay,
-      //   alpha: 0.2, // daylight
-      //   duration: 15000,
-      //   yoyo: true,
-      //   repeat: -1,
-      //   ease: "Sine.easeInOut",
-      // });
     }
 
     createDebugBox() {
@@ -92,8 +74,8 @@
         backgroundColor: "#00000080",
       });
       this.tilePosText.setScrollFactor(0);
-      this.tilePosText.setOrigin(1, 0); // right-align horizontally, top-align vertically
-      // Update its position to be at the right edge of the camera:
+      this.tilePosText.setOrigin(1, 0);
+
       this.tilePosText.setPosition(this.cameras.main.width - 10, 10);
       this.tilePosText.setDepth(400);
     }
@@ -102,23 +84,17 @@
       this.carGroup = this.physics.add.group();
       this.createDebugBox();
       this.personGroup = this.physics.add.group();
-      this.lights.enable().setAmbientColor(0xcccccc); // dark ambient light
+      this.lights.enable().setAmbientColor(0xcccccc);
       this.physics.add.collider(
         this.carGroup,
         this.personGroup,
-        (spriteA, spriteB) => {
-          // This callback is called when two car sprites collide.
-          // console.log("Car/person collision between:", spriteA, spriteB);
-          // You can add additional collision logic here.
-        }
+        (spriteA, spriteB) => {}
       );
       this.physics.add.collider(
         this.carGroup,
         this.carGroup,
         (spriteA, spriteB) => {
-          // This callback is called when two car sprites collide.
           console.log("Car/car collision between:", spriteA, spriteB);
-          // You can add additional collision logic here.
         }
       );
 
@@ -133,8 +109,7 @@
       }
       const groundLayer = map.createLayer("ground", tileset, 0, 0);
       groundLayer?.setOrigin(0, 0);
-      const roadLayer = map.createLayer("road", tileset, 64, 208);
-      // roadLayer?.setOrigin(0, 0);
+      const roadLayer = map.createLayer("road", tileset, 0, 0);
 
       if (!groundLayer || !roadLayer) {
         console.error("Layer not found!");
@@ -152,7 +127,6 @@
       let maxY = 0;
 
       groundLayer.forEachTile((tile) => {
-        // tile.index of -1 means empty in Phaser.
         if (tile.index !== -1) {
           if (tile.pixelX < minX) {
             minX = tile.pixelX;
@@ -171,19 +145,16 @@
 
       console.log("Ground tile bounds:", minX, minY, maxX, maxY);
 
-      // Set world and camera bounds to match the region where actual ground tiles exist.
       this.physics.world.setBounds(minX, minY, maxX - minX, maxY - minY);
       this.cameras.main.setBounds(minX, minY, maxX - minX, maxY - minY);
-      // this.setNighttime(maxX, maxY);
 
-      // Create WASD keys.
       this.cursors = this.input.keyboard.addKeys({
         up: Phaser.Input.Keyboard.KeyCodes.W,
         left: Phaser.Input.Keyboard.KeyCodes.A,
         down: Phaser.Input.Keyboard.KeyCodes.S,
         right: Phaser.Input.Keyboard.KeyCodes.D,
       }) as Phaser.Types.Input.Keyboard.CursorKeys;
-      // Key to enter/exit car, e.g., E.
+
       this.action = this.input.keyboard.addKey(
         Phaser.Input.Keyboard.KeyCodes.E
       );
@@ -193,7 +164,7 @@
         frames: this.anims.generateFrameNumbers("person-walk", {
           start: 0,
           end: 7,
-        }), // adjust range as needed
+        }),
         frameRate: 8,
         repeat: -1,
       });
@@ -202,15 +173,10 @@
         frames: this.anims.generateFrameNumbers("person-idle", {
           start: 0,
           end: 3,
-        }), // adjust range as needed
+        }),
         frameRate: 8,
         repeat: -1,
       });
-      // Create a person entity.
-
-      // Start with the person as the controlled entity.
-
-      // Subscribe to server state updates as needed.
     }
 
     createPerson(object: PersonObject) {
@@ -221,9 +187,7 @@
         this.controller = new PlayerController(user.user!.sub, person);
         this.controller.addEventListener(
           "updated",
-          (e: CustomEvent<{ entity: Controllable }>) => {
-            // this.updateServer(e.detail.entity, false);
-          }
+          (e: CustomEvent<{ entity: Controllable }>) => {}
         );
       }
 
@@ -274,12 +238,7 @@
           }
         }
 
-        // if (object.controller_user_id !== user.user!.sub) {
         this.objects.get(objectId)!.updateInputFromServer(object, time, delta);
-        // }
-        // this.cars.get(userId)!.updateInput({
-        //   u
-        // }, 0);
       }
     }
 
@@ -311,7 +270,6 @@
       }
 
       return this.performUpdate(inputState);
-      // console.log("bob?");
     }
 
     update(time: number, delta: number) {
@@ -330,7 +288,6 @@
     }
 
     async executeAction(actionId: string) {
-      // console.log("updateserver called", inputState);
       return await websocketClient.mutation([
         "lobby.action",
         {
@@ -369,7 +326,6 @@
   }
 
   function onData(data: PersonalizedGameData) {
-    // console.log(data.visible_objects);
     lobby = data;
   }
 
@@ -380,7 +336,6 @@
   onMount(() => {
     let unsubscribe: (() => void) | undefined;
     if (user.accessToken) {
-      // console.log(["lobby.subscribe", [gameId, user.accessToken]]);
       unsubscribe = websocketClient.addSubscription(
         ["lobby.subscribe", [gameId, user.accessToken]],
         {

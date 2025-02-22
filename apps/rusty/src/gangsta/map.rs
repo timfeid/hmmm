@@ -111,7 +111,7 @@ pub struct Road {
 pub struct Map {
     width: usize,
     height: usize,
-    grid: Vec<Vec<Tile>>,
+    pub grid: Vec<Vec<Tile>>,
 }
 
 impl Map {
@@ -198,16 +198,31 @@ impl Map {
         }
     }
 
-    pub fn display(&self, vehicle: &Vehicle) {
-        // Iterate over rows from top (highest index) to bottom (0)
+    pub fn display2(&self) {
         for y in (0..self.height) {
             let mut line = String::new();
             for x in 0..self.width {
-                // If this cell is where the vehicle is located, show the vehicle.
+                let ch = match self.grid[y][x].tile_type {
+                    TileType::Empty => ' ',
+                    TileType::Road(RoadType::Interstate) => '□',
+                    TileType::Road(RoadType::Arterial) => '□',
+                    TileType::Road(RoadType::Collector) => '□',
+                    TileType::Road(RoadType::Local) => '□',
+                    TileType::Building => ' ',
+                };
+                line.push(ch);
+            }
+            println!("{} {}", y, line);
+        }
+    }
+
+    pub fn display(&self, vehicle: &Vehicle) {
+        for y in (0..self.height) {
+            let mut line = String::new();
+            for x in 0..self.width {
                 if vehicle.position.x as usize == x && vehicle.position.y as usize == y {
                     line.push('V');
                 } else {
-                    // Otherwise, show the tile based on its type.
                     let ch = match self.grid[y][x].tile_type {
                         TileType::Empty => ' ',
                         TileType::Road(RoadType::Interstate) => '□',
@@ -219,7 +234,7 @@ impl Map {
                     line.push(ch);
                 }
             }
-            println!("{}", line);
+            println!("{} {}", y, line);
         }
     }
 
@@ -233,7 +248,6 @@ impl Map {
 
         while let Some(Reverse((cost, pos))) = heap.pop() {
             if pos == goal {
-                // Reconstruct path from goal back to start.
                 let mut path = Vec::new();
                 let mut current = pos;
                 while let Some(&p) = prev.get(&current) {
@@ -245,30 +259,22 @@ impl Map {
                 return Some(path);
             }
 
-            // Check 4 neighbors (up, down, left, right)
             for (dx, dy) in &[(1, 0), (-1, 0), (0, 1), (0, -1)] {
-                let nx = pos.x as i32 + dx;
-                let ny = pos.y as i32 + dy;
+                let nx = pos.x + dx;
+                let ny = pos.y + dy;
 
                 if nx < 0 || ny < 0 || nx >= self.width as i32 || ny >= self.height as i32 {
                     continue;
                 }
 
-                let neighbor = Coordinates {
-                    x: nx as i32,
-                    y: ny as i32,
-                };
+                let neighbor = Coordinates { x: nx, y: ny };
 
-                // Only traverse if the neighbor is a Road tile.
-                if neighbor.y > 0 || neighbor.x > 0 {
-                    continue;
-                }
                 match self.grid[neighbor.y as usize][neighbor.x as usize].tile_type {
-                    TileType::Road(_) => { /* valid */ }
+                    TileType::Road(_) => {}
                     _ => continue,
                 }
 
-                let next_cost = cost + 1; // uniform cost for each step
+                let next_cost = cost + 1;
                 if next_cost < *dist.get(&neighbor).unwrap_or(&i32::MAX) {
                     dist.insert(neighbor, next_cost);
                     prev.insert(neighbor, pos);
@@ -277,54 +283,45 @@ impl Map {
             }
         }
 
-        // No path found.
         None
     }
 }
 
 impl Map {
     pub fn generate(&mut self) {
-        // 30 rows × 50 columns. (Make sure each string is exactly 50 characters.)
         let raw = vec![
-            "==================================================", // row  0
-            "  -              -               -             -  ", // row  1
-            "  -              -               -             -  ", // row  2: Arterials (horizontal)
-            "  -              -               -             -  ", // row  3
-            "  -              -               -             -  ", // row  4
-            "  -              -               -             -  ", // row  5
-            "  -++++++++++++++++++++++++++++++++++++++++++++-  ", // row  6: Collectors
-            "  -              +               +             -  ", // row  7: Locals
-            "  -              +               +             -  ", // row  8
-            "  -              +               +             -  ", // row  9
-            "  -              +               +             -  ", // row 10
-            "  -              +               +             -  ", // row 11: More arterials (horizontal)
-            "  -              +               +             -  ", // row 12
-            "  -              +               +             -  ", // row 13
-            "  -              +               +             -  ", // row 14: Interstate (horizontal)
-            "  -              +               +             -  ", // row 15: Interstate (thick)
-            "  -              +               +             -  ", // row 16
-            "  -              +               +             -  ", // row 17
-            "  -              +               +             -  ", // row 18
-            "  -++++++++++++++++++++++++++++++++++++++++++++-  ", // row 19
-            "  -              .               .             -  ", // row 20: Arterials (again)
-            "  -              .               .             -  ", // row 21
-            "  -  .............               .      ...    -  ", // row 22: Collectors
-            "  -       .      .               .      .      -  ", // row 23: Locals
-            "  -       .      .................      .      -  ", // row 24: Locals
-            "  -       .      .               .      .      -  ", // row 25
-            "  -       .      .               .      .      -  ", // row 26: Vertical Interstate (using "  ")
-            "  -  ......      .               ........      -  ", // row 27
-            "  -              .               .             -  ", // row 28
-            "  -                                            -  ", // row 29
+            "==================================================",
+            "  -              -               -             -  ",
+            "  -              -               -             -  ",
+            "  -              -               -             -  ",
+            "  -              -               -             -  ",
+            "  -              -               -             -  ",
+            "  -++++++++++++++++++++++++++++++++++++++++++++-  ",
+            "  -              +               +             -  ",
+            "  -              +               +             -  ",
+            "  -              +               +             -  ",
+            "  -              +               +             -  ",
+            "  -              +               +             -  ",
+            "  -              +               +             -  ",
+            "  -              +               +             -  ",
+            "  -              +               +             -  ",
+            "  -              +               +             -  ",
+            "  -              +               +             -  ",
+            "  -              +               +             -  ",
+            "  -              +               +             -  ",
+            "  -++++++++++++++++++++++++++++++++++++++++++++-  ",
+            "  -              .               .             -  ",
+            "  -              .               .             -  ",
+            "  -  .............               .      ...    -  ",
+            "  -       .      .               .      .      -  ",
+            "  -       .      .................      .      -  ",
+            "  -       .      .               .      .      -  ",
+            "  -       .      .               .      .      -  ",
+            "  -  ......      .               ........      -  ",
+            "  -              .               .             -  ",
+            "  -                                            -  ",
         ];
 
-        // Convert each character into a Tile using our mapping:
-        // ' ' -> Empty
-        // '=' or '|' -> Road(Interstate)
-        // '-' -> Road(Arterial)
-        // '+' -> Road(Collector)
-        // '.' -> Road(Local)
-        // '#' -> Building
         let response = raw
             .into_iter()
             .map(|line| {
@@ -353,19 +350,32 @@ pub struct Coordinates {
     pub y: i32,
 }
 
+pub fn pixel_to_tile(tile: Coordinates) -> Coordinates {
+    Coordinates {
+        x: tile.x / 16,
+        y: tile.y / 16,
+    }
+}
+
+pub fn tile_to_pixel(tile: Coordinates) -> Coordinates {
+    Coordinates {
+        x: tile.x * 16,
+        y: tile.y * 16,
+    }
+}
+
 mod test {
     use crate::gangsta::vehicle::Vehicle;
 
     use super::Map;
 
-    // #[tokio::test]
     #[test]
     fn test() {
         let vehicle = Vehicle::new(
-            0,
+            "x".to_string(),
             super::Coordinates { x: 2, y: 2 },
-            super::Coordinates { x: 55, y: 55 },
             crate::gangsta::vehicle::VehicleBehavior::Aggressive,
+            3,
         );
         let map =
             Map::from_json(include_str!("maps/suburb.json")).expect("unable to read json map?");

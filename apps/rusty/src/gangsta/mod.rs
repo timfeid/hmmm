@@ -3,14 +3,18 @@ use std::collections::HashMap;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::Arc;
+use std::thread::sleep;
+use std::time::Duration;
 use std::{future::Future, pin::Pin};
 
 use action::{Action, ActionBuilder, ActionTrigger, ActionTriggerType};
 use axum::async_trait;
-use map::{Coordinates, Map};
+use map::{pixel_to_tile, Coordinates, Map};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use tokio::sync::Mutex;
+use tokio::time::interval;
+use vehicle::Vehicle;
 
 use crate::error::{AppError, AppResult};
 
@@ -51,6 +55,7 @@ impl PersonDetails {
 pub struct CarDetails {
     pub skin: CarSkin,
     pub speed: u16,
+    pub acceleration: u16,
     pub max_passengers: u8,
     pub passenger_user_ids: Vec<String>,
     pub rotation_speed: u16,
@@ -58,10 +63,17 @@ pub struct CarDetails {
 }
 
 impl CarDetails {
-    pub fn new(skin: CarSkin, speed: u16, rotation_speed: u16, max_passengers: u8) -> Self {
+    pub fn new(
+        skin: CarSkin,
+        speed: u16,
+        acceleration: u16,
+        rotation_speed: u16,
+        max_passengers: u8,
+    ) -> Self {
         Self {
             skin,
             speed,
+            acceleration,
             max_passengers,
             passenger_user_ids: vec![],
             rotation_speed,
@@ -70,7 +82,6 @@ impl CarDetails {
     }
 }
 
-// The GameObjectInfo enum tells us what kind of object this is.
 #[derive(Type, Deserialize, Serialize, Debug, Clone)]
 pub enum GameObjectInfo {
     Person(PersonDetails),
@@ -86,20 +97,6 @@ pub enum CarSkin {
 #[derive(Type, Deserialize, Serialize, Debug, Clone)]
 pub enum PersonSkin {
     Default,
-}
-
-#[derive(Type, Deserialize, Serialize, Debug, Clone)]
-pub struct Car {
-    pub id: String,
-    pub skin: CarSkin,
-    pub speed: u16,
-    pub rotation_speed: u16,
-    pub driver_user_id: Option<String>,
-    pub passenger_user_ids: Vec<String>,
-    pub x: i32,
-    pub y: i32,
-    pub rotation: f32,
-    pub velocity: Coordinates,
 }
 
 #[derive(Type, Deserialize, Serialize, Debug, Clone)]
@@ -148,50 +145,6 @@ impl Player {
     }
 }
 
-impl Car {
-    pub fn to_outgoing_game_object(&self) -> OutgoingGameObject {
-        OutgoingGameObject {
-            action: Some(ActionBuilder::new(ActionTriggerType::ActionKeyPressed(32))
-                        .closure_action(
-                            |state, object_id, user_id| -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> {
-                                Box::pin(async move {
-                                    println!(
-                                        "user {} wants to do something with the car {}!",
-                                        user_id,object_id
-                                    );
-
-                                    if let Some(obj) = state.lock().await.objects.get_mut(&object_id) {
-                                        let GameObjectType::Car(car_details) = &mut obj.details;
-                                        car_details.action(user_id);
-                                    }
-                                    Ok(())
-                                })
-                            },
-                        )
-                        .build()),
-            controller_user_id: self.driver_user_id.clone(),
-            id: self.id.clone(),
-            x: self.x.clone(),
-            y: self.y.clone(),
-            rotation: self.rotation.clone(),
-            velocity: self.velocity.clone(),
-            owner_user_id: self.id.clone(),
-            details: GameObjectInfo::Car(CarDetails {
-                skin: self.skin.clone(),
-                speed: self.speed.clone(),
-                max_passengers: self.passenger_user_ids.len() as u8,
-                passenger_user_ids: self.passenger_user_ids.clone(),
-                rotation_speed: self.rotation_speed.clone(),
-                driver_user_id: self.driver_user_id.clone(),
-            }),
-        }
-    }
-
-    fn action(&mut self, user_id: String) {
-        self.driver_user_id = Some(user_id);
-    }
-}
-
 pub trait ToOutgoingGame: Debug + Send + Sized {
     fn to_outgoing_game_object(&self) -> OutgoingGameObject;
 }
@@ -200,6 +153,13 @@ pub struct GameObject {
     pub details: GameObjectType,
 }
 impl GameObject {
+    async fn tick(&mut self) -> AppResult<()> {
+        match &mut self.details {
+            GameObjectType::Car(car) => car.tick(),
+        }
+        Ok(())
+    }
+
     async fn apply_action(
         &mut self,
         get_state: Arc<Mutex<GameState>>,
@@ -213,13 +173,13 @@ impl GameObject {
 }
 
 pub enum GameObjectType {
-    Car(Car),
+    Car(Vehicle),
 }
 
-// Our overall game state holds a set of visible objects.
 pub struct GameState {
     pub players: HashMap<String, Player>,
     pub objects: HashMap<String, GameObject>,
+    pub map: Map,
 }
 
 impl Debug for GameState {
@@ -236,42 +196,47 @@ impl GameState {
         let mut objects = HashMap::new();
         players.insert("tim".to_string(), Player::new("tim".to_string()));
         players.insert("bob".to_string(), Player::new("bob".to_string()));
+        let map = Map::from_json(include_str!("maps/suburb.json")).unwrap();
 
-        // Insert a Car.
-        let car = Car {
-            id: "tim's car".to_string(),
-            skin: CarSkin::Sedan,
-            speed: 150,
-            rotation_speed: 3,
-            driver_user_id: None,
-            passenger_user_ids: vec![],
-            x: 628,
-            y: 800,
-            rotation: 90.0,
-            velocity: Coordinates { x: 0, y: 0 },
-        };
+        let mut vehicle = Vehicle::new(
+            "tim's car".to_string(),
+            Coordinates { x: 160, y: 368 },
+            vehicle::VehicleBehavior::Normal,
+            2,
+        );
+
+        let path = map
+            .find_path(
+                pixel_to_tile(vehicle.position),
+                pixel_to_tile(Coordinates { x: 1360, y: 1360 }),
+            )
+            .expect("no path found");
+
+        vehicle.set_tile_path(path);
+
         objects.insert(
-            car.id.clone(),
+            vehicle.id.clone(),
             GameObject {
-                details: GameObjectType::Car(car),
+                details: GameObjectType::Car(vehicle),
             },
         );
 
-        Self { players, objects }
+        Self {
+            players,
+            objects,
+            map,
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Game {
-    map: Map,
     state: Arc<Mutex<GameState>>,
 }
 
 impl Default for Game {
     fn default() -> Self {
         Self {
-            map: Map::from_json(include_str!("maps/suburb.json")).unwrap(),
-            // objects: vec![],
             state: Arc::new(Mutex::new(GameState::default())),
         }
     }
@@ -288,9 +253,7 @@ impl Game {
         &self.state
     }
 
-    /// Processes basic input (this could be movement, etc.)
     pub async fn input(&mut self, user_id: String, input: PlayerInput) -> &Self {
-        // Implement movement logic as needed.
         let mut state = self.get_state().lock().await;
         if let Some(player) = state.players.get_mut(&user_id) {
             player.input(input)
@@ -309,17 +272,20 @@ impl Game {
 
         Ok(self)
     }
+
+    pub async fn tick(&mut self) {
+        let objects = &mut self.state.lock().await.objects;
+        for (id, obj) in objects.iter_mut() {
+            obj.tick().await.expect("hmm");
+        }
+    }
 }
 
-// ----- Player and Trait-Based Control -----
-
-/// Trait for objects that can be controlled.
 #[async_trait]
 pub trait Controllable {
     async fn control(&mut self, player: &Player, state: Arc<Mutex<GameState>>) -> AppResult<()>;
 }
 
-/// Implement control for CarDetails.
 #[async_trait]
 impl Controllable for CarDetails {
     async fn control(&mut self, player: &Player, _state: Arc<Mutex<GameState>>) -> AppResult<()> {

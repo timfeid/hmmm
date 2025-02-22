@@ -9,7 +9,7 @@ import { user } from "../../stores/access-token.svelte";
 export class Person implements Controllable, ServerUpdatable {
   id: string;
   public sprite: Phaser.Physics.Arcade.Sprite;
-  public speed: number = 80;
+  public speed: number = 10;
   public rotationSpeed = 100;
   private lastServerUpdateTime: number = 0;
   public inControl = true;
@@ -114,14 +114,14 @@ export class Person implements Controllable, ServerUpdatable {
     let vx = 0,
       vy = 0;
     if (cursors.up.isDown) {
-      vy = -this.speed;
+      vy = -this.speed * 10;
     } else if (cursors.down.isDown) {
-      vy = this.speed;
+      vy = this.speed * 10;
     }
     if (cursors.left.isDown) {
-      vx = -this.speed;
+      vx = -this.speed * 10;
     } else if (cursors.right.isDown) {
-      vx = this.speed;
+      vx = this.speed * 10;
     }
     if (vx !== 0 || vy !== 0) {
       if (this.sprite.anims.currentAnim?.key !== "walk") {

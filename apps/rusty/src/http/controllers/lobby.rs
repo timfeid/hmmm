@@ -9,12 +9,15 @@ use async_stream::stream;
 use futures::{pin_mut, Stream};
 use serde::{Deserialize, Serialize};
 use specta::Type;
-use tokio::sync::{Mutex, MutexGuard};
+use tokio::{
+    sync::{Mutex, MutexGuard},
+    time::interval,
+};
 use tokio_stream::StreamExt;
 
 use crate::{
     error::{AppError, AppResult},
-    gangsta::{map::Coordinates, Car, GameObjectType, OutgoingGameObject, PlayerInput},
+    gangsta::{map::Coordinates, GameObjectType, OutgoingGameObject, PlayerInput},
     http::context::Ctx,
     lobby::{
         lobby::{Lobby, LobbyChat, LobbyData},
@@ -73,7 +76,6 @@ impl LobbyController {
     pub async fn ready(ctx: Ctx, code: String) -> AppResult<()> {
         let user = ctx.required_user()?;
 
-        // Step 1: Get the lobby instance from the lobby manager and release the lock
         let l = Arc::clone(&ctx.lobby_manager);
         let lobby = l
             .get_lobby(&code)
@@ -96,12 +98,22 @@ impl LobbyController {
             .await
             .map_err(|x| AppError::BadRequest("No such lobby".to_string()))?;
         let data = lobby.lock().await.data.clone();
-        let mng = Arc::clone(&ctx.lobby_manager);
-        let join_code_cloned = code.clone();
+
+        let lobby_clone = lobby.clone();
+        let code_clone = code.clone();
+        let lobby_manager = ctx.lobby_manager.clone();
+
         tokio::spawn(async move {
+            let tick_duration = Duration::from_millis(50);
+            let mut ticker = interval(tick_duration);
             loop {
-                mng.notify_lobby(&join_code_cloned).await.ok();
-                sleep(Duration::from_millis(3));
+                ticker.tick().await;
+                {
+                    let mut lobby_guard = lobby_clone.lock().await;
+                    lobby_guard.data.game.tick().await;
+                }
+
+                lobby_manager.notify_lobby(&code_clone).await.ok();
             }
         });
 
